@@ -16,15 +16,18 @@ app = FastAPI(title="Shifters Visualization Server")
 websocket_clients: List[WebSocket] = []
 
 # F1 Circuits data
-F1_CIRCUITS_FILE = Path(__file__).parent.parent.parent / "data" / "circuits" / "f1-circuits.geojson"
+F1_CIRCUITS_FILE = (
+    Path(__file__).parent.parent.parent / "data" / "circuits" / "f1-circuits.geojson"
+)
+
 
 def load_f1_circuits_list():
     """Load list of available F1 circuits."""
     if not F1_CIRCUITS_FILE.exists():
         return []
-    
+
     try:
-        with open(F1_CIRCUITS_FILE, 'r', encoding='utf-8') as f:
+        with open(F1_CIRCUITS_FILE, "r", encoding="utf-8") as f:
             geojson_data = json.load(f)
         circuits = GeoJSONTrackParser.list_circuits_in_collection(geojson_data)
         return circuits
@@ -58,7 +61,7 @@ class SimulationManager:
         """Run a simulation with the given configuration."""
         # Create track - either from F1 circuit or custom
         circuit_id = config.get("circuit_id")
-        
+
         if circuit_id and circuit_id != "custom" and F1_CIRCUITS_FILE.exists():
             # Load F1 circuit
             try:
@@ -119,8 +122,8 @@ class SimulationManager:
         ]
 
         for i in range(num_agents):
-            max_speed = 180 + (i * 5)
-            acceleration = 12 + (i * 0.5)
+            max_speed = 180 + ((num_agents - 1 - i) * 5)
+            acceleration = 12 + ((num_agents - 1 - i) * 0.5)
 
             vehicle = RacingVehicle(
                 model=self.simulation,
