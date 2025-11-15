@@ -1,0 +1,13 @@
+[project]
+name = "shifters"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.121.2",
+    "graphviz>=0.21",
+    "matplotlib>=3.10.7",
+    "mesa>=3.3.1",
+    "pydantic>=2.12.4",
+    "uvicorn>=0.38.0",
+]
