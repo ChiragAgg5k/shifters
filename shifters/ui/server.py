@@ -7,13 +7,30 @@ import asyncio
 import json
 from pathlib import Path
 
-from shifters import MobilitySimulation, Track, RacingVehicle
+from shifters import MobilitySimulation, Track, RacingVehicle, GeoJSONTrackParser
 
 
 app = FastAPI(title="Shifters Visualization Server")
 
 # Store active simulations
 websocket_clients: List[WebSocket] = []
+
+# F1 Circuits data
+F1_CIRCUITS_FILE = Path(__file__).parent.parent.parent / "data" / "circuits" / "f1-circuits.geojson"
+
+def load_f1_circuits_list():
+    """Load list of available F1 circuits."""
+    if not F1_CIRCUITS_FILE.exists():
+        return []
+    
+    try:
+        with open(F1_CIRCUITS_FILE, 'r', encoding='utf-8') as f:
+            geojson_data = json.load(f)
+        circuits = GeoJSONTrackParser.list_circuits_in_collection(geojson_data)
+        return circuits
+    except Exception as e:
+        print(f"Error loading F1 circuits: {e}")
+        return []
 
 
 class SimulationManager:
@@ -39,13 +56,35 @@ class SimulationManager:
 
     async def run_simulation(self, config: Dict[str, Any]):
         """Run a simulation with the given configuration."""
-        # Create track
-        track = Track(
-            length=config.get("track_length", 1000.0),
-            num_laps=config.get("num_laps", 3),
-            track_type="circuit",
-            name=config.get("track_name", "Visualization Track"),
-        )
+        # Create track - either from F1 circuit or custom
+        circuit_id = config.get("circuit_id")
+        
+        if circuit_id and circuit_id != "custom" and F1_CIRCUITS_FILE.exists():
+            # Load F1 circuit
+            try:
+                track = GeoJSONTrackParser.from_feature_collection_file(
+                    str(F1_CIRCUITS_FILE),
+                    circuit_id=circuit_id,
+                    num_laps=config.get("num_laps", 3),
+                )
+                print(f"Loaded F1 circuit: {track.name}")
+            except Exception as e:
+                print(f"Error loading F1 circuit {circuit_id}: {e}")
+                # Fallback to custom track
+                track = Track(
+                    length=config.get("track_length", 1000.0),
+                    num_laps=config.get("num_laps", 3),
+                    track_type="circuit",
+                    name=config.get("track_name", "Visualization Track"),
+                )
+        else:
+            # Create custom track
+            track = Track(
+                length=config.get("track_length", 1000.0),
+                num_laps=config.get("num_laps", 3),
+                track_type="circuit",
+                name=config.get("track_name", "Visualization Track"),
+            )
 
         # Add checkpoints
         num_checkpoints = 4
@@ -188,6 +227,13 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in websocket_clients:
             websocket_clients.remove(websocket)
+
+
+@app.get("/api/circuits")
+async def get_circuits():
+    """Get list of available F1 circuits."""
+    circuits = load_f1_circuits_list()
+    return {"circuits": circuits}
 
 
 @app.get("/health")

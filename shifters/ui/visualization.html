@@ -323,16 +323,22 @@
                     <input type="number" id="numAgents" value="5" min="2" max="20">
                 </div>
                 <div class="config-item">
+                    <label>Circuit Selection</label>
+                    <select id="circuitSelect" onchange="updateTrackConfig()">
+                        <option value="custom">Custom Track</option>
+                    </select>
+                </div>
+                <div class="config-item">
                     <label>Track Length (m)</label>
-                    <input type="number" id="trackLength" value="1000" min="500" max="5000" step="100">
+                    <input type="number" id="trackLength" value="1000" min="500" max="10000" step="100">
                 </div>
                 <div class="config-item">
                     <label>Number of Laps</label>
-                    <input type="number" id="numLaps" value="3" min="1" max="10">
+                    <input type="number" id="numLaps" value="3" min="1" max="100">
                 </div>
                 <div class="config-item">
                     <label>Track Name</label>
-                    <input type="text" id="trackName" value="Monaco Street Circuit">
+                    <input type="text" id="trackName" value="Custom Circuit" readonly>
                 </div>
             </div>
         </div>
@@ -463,12 +469,18 @@
         }
 
         async function startRace() {
+            const circuitId = document.getElementById('circuitSelect').value;
             const config = {
                 num_agents: parseInt(document.getElementById('numAgents').value),
-                track_length: parseFloat(document.getElementById('trackLength').value),
                 num_laps: parseInt(document.getElementById('numLaps').value),
-                track_name: document.getElementById('trackName').value
+                circuit_id: circuitId
             };
+
+            // Only include custom track params if not using F1 circuit
+            if (circuitId === 'custom') {
+                config.track_length = parseFloat(document.getElementById('trackLength').value);
+                config.track_name = document.getElementById('trackName').value;
+            }
 
             try {
                 const response = await fetch('/api/simulation/start', {
@@ -556,6 +568,18 @@
 
             if (!state.environment || !state.agents) return;
 
+            const track = state.environment.track;
+            const trackLength = track.length;
+
+            // Check if we have actual geometry coordinates
+            if (track.has_geometry && track.coordinates && track.coordinates.length > 0) {
+                drawGeoJSONTrack(state);
+            } else {
+                drawCircularTrack(state);
+            }
+        }
+
+        function drawCircularTrack(state) {
             const trackLength = state.environment.track.length;
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
@@ -589,48 +613,173 @@
             ctx.lineTo(startX + 30, startY);
             ctx.stroke();
 
-            // Draw agents
+            // Draw agents on circular track
             state.agents.forEach((agent, index) => {
                 const progress = agent.position / trackLength;
                 const angle = startAngle + (progress * 2 * Math.PI);
                 const x = centerX + radius * Math.cos(angle);
                 const y = centerY + radius * Math.sin(angle);
 
-                // Agent circle
-                const color = agentColors[index % agentColors.length];
-                ctx.fillStyle = agent.finished ? '#4caf50' : color;
-                ctx.beginPath();
-                ctx.arc(x, y, 12, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Agent border
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                // Agent label
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 11px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(agent.name.split('#')[1] || (index + 1), x, y + 4);
-
-                // Speed indicator (trail)
-                if (agent.speed > 0 && !agent.finished) {
-                    const trailLength = Math.min(agent.speed / 5, 20);
-                    const prevAngle = angle - (trailLength * 2 * Math.PI / trackLength);
-                    const prevX = centerX + radius * Math.cos(prevAngle);
-                    const prevY = centerY + radius * Math.sin(prevAngle);
-
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 4;
-                    ctx.globalAlpha = 0.3;
-                    ctx.beginPath();
-                    ctx.moveTo(prevX, prevY);
-                    ctx.lineTo(x, y);
-                    ctx.stroke();
-                    ctx.globalAlpha = 1;
-                }
+                drawAgent(agent, index, x, y);
             });
+        }
+
+        function drawGeoJSONTrack(state) {
+            const track = state.environment.track;
+            const coords = track.coordinates;
+            
+            // Calculate bounding box for scaling
+            const minX = Math.min(...coords.map(c => c.x));
+            const maxX = Math.max(...coords.map(c => c.x));
+            const minY = Math.min(...coords.map(c => c.y));
+            const maxY = Math.max(...coords.map(c => c.y));
+            
+            const padding = 60;
+            const availableWidth = canvas.width - 2 * padding;
+            const availableHeight = canvas.height - 2 * padding;
+            
+            const trackWidth = maxX - minX;
+            const trackHeight = maxY - minY;
+            
+            // Calculate scale to fit track in canvas
+            const scale = Math.min(availableWidth / trackWidth, availableHeight / trackHeight);
+            
+            // Center the track
+            const offsetX = padding + (availableWidth - trackWidth * scale) / 2;
+            const offsetY = padding + (availableHeight - trackHeight * scale) / 2;
+            
+            // Transform function
+            const transform = (coord) => ({
+                x: offsetX + (coord.x - minX) * scale,
+                y: offsetY + (coord.y - minY) * scale
+            });
+            
+            // Draw track outline
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 40;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            
+            const transformedCoords = coords.map(transform);
+            if (transformedCoords.length > 0) {
+                ctx.moveTo(transformedCoords[0].x, transformedCoords[0].y);
+                for (let i = 1; i < transformedCoords.length; i++) {
+                    ctx.lineTo(transformedCoords[i].x, transformedCoords[i].y);
+                }
+                // Close the loop for circuit tracks
+                if (track.track_type === 'circuit') {
+                    ctx.lineTo(transformedCoords[0].x, transformedCoords[0].y);
+                }
+            }
+            ctx.stroke();
+            
+            // Draw track center line
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            if (transformedCoords.length > 0) {
+                ctx.moveTo(transformedCoords[0].x, transformedCoords[0].y);
+                for (let i = 1; i < transformedCoords.length; i++) {
+                    ctx.lineTo(transformedCoords[i].x, transformedCoords[i].y);
+                }
+                if (track.track_type === 'circuit') {
+                    ctx.lineTo(transformedCoords[0].x, transformedCoords[0].y);
+                }
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw start/finish line
+            if (transformedCoords.length > 0) {
+                const start = transformedCoords[0];
+                const next = transformedCoords[1] || transformedCoords[0];
+                
+                // Calculate perpendicular direction for start line
+                const dx = next.x - start.x;
+                const dy = next.y - start.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                const perpX = -dy / length * 20;
+                const perpY = dx / length * 20;
+                
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(start.x - perpX, start.y - perpY);
+                ctx.lineTo(start.x + perpX, start.y + perpY);
+                ctx.stroke();
+            }
+            
+            // Build cumulative distance array for agent positioning
+            const distances = [0];
+            for (let i = 1; i < coords.length; i++) {
+                const dx = coords[i].x - coords[i-1].x;
+                const dy = coords[i].y - coords[i-1].y;
+                const segmentDist = Math.sqrt(dx * dx + dy * dy);
+                distances.push(distances[i-1] + segmentDist);
+            }
+            
+            // Draw agents on GeoJSON track
+            state.agents.forEach((agent, index) => {
+                const progress = agent.position / track.length;
+                const targetDist = progress * distances[distances.length - 1];
+                
+                // Find which segment the agent is on
+                let segmentIndex = 0;
+                for (let i = 1; i < distances.length; i++) {
+                    if (targetDist <= distances[i]) {
+                        segmentIndex = i - 1;
+                        break;
+                    }
+                }
+                
+                // Interpolate position within segment
+                const segStart = distances[segmentIndex];
+                const segEnd = distances[segmentIndex + 1] || distances[segmentIndex];
+                const segProgress = (segEnd - segStart) > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0;
+                
+                const coord1 = coords[segmentIndex];
+                const coord2 = coords[(segmentIndex + 1) % coords.length];
+                
+                const agentX = coord1.x + (coord2.x - coord1.x) * segProgress;
+                const agentY = coord1.y + (coord2.y - coord1.y) * segProgress;
+                
+                const transformed = transform({ x: agentX, y: agentY });
+                drawAgent(agent, index, transformed.x, transformed.y);
+            });
+        }
+
+        function drawAgent(agent, index, x, y) {
+            // Agent circle
+            const color = agentColors[index % agentColors.length];
+            ctx.fillStyle = agent.finished ? '#4caf50' : color;
+            ctx.beginPath();
+            ctx.arc(x, y, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Agent border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Agent label
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(agent.name.split('#')[1] || (index + 1), x, y + 4);
+
+            // Speed indicator (trail)
+            if (agent.speed > 0 && !agent.finished) {
+                const speedFactor = agent.speed / 200; // Normalize assuming max ~200 km/h
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.globalAlpha = 0.3 * speedFactor;
+                ctx.beginPath();
+                ctx.arc(x, y, 16 + speedFactor * 8, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
         }
 
         function updateLeaderboard(standings) {
@@ -659,9 +808,57 @@
             });
         }
 
+        async function loadCircuits() {
+            try {
+                const response = await fetch('/api/circuits');
+                const data = await response.json();
+                populateCircuitDropdown(data.circuits);
+            } catch (error) {
+                console.error('Error loading circuits:', error);
+            }
+        }
+
+        function populateCircuitDropdown(circuits) {
+            const select = document.getElementById('circuitSelect');
+            
+            // Clear existing options except "Custom Track"
+            select.innerHTML = '<option value="custom">Custom Track</option>';
+            
+            // Add F1 circuits
+            circuits.forEach(circuit => {
+                const option = document.createElement('option');
+                option.value = circuit.id;
+                option.textContent = `${circuit.name} - ${circuit.location}`;
+                select.appendChild(option);
+            });
+        }
+
+        function updateTrackConfig() {
+            const circuitId = document.getElementById('circuitSelect').value;
+            const trackLengthInput = document.getElementById('trackLength');
+            const trackNameInput = document.getElementById('trackName');
+
+            if (circuitId === 'custom') {
+                // Enable custom track inputs
+                trackLengthInput.disabled = false;
+                trackNameInput.readOnly = false;
+                trackNameInput.value = trackNameInput.value || 'Custom Track';
+            } else {
+                // Disable inputs for F1 circuits - they'll be loaded from GeoJSON
+                trackLengthInput.disabled = true;
+                trackNameInput.readOnly = true;
+                
+                // Find selected circuit to display its name
+                const select = document.getElementById('circuitSelect');
+                const selectedOption = select.options[select.selectedIndex];
+                trackNameInput.value = selectedOption.textContent;
+            }
+        }
+
         // Initialize
         window.onload = () => {
             connectWebSocket();
+            loadCircuits();
             console.log('Shifters Visualization loaded');
         };
     </script>

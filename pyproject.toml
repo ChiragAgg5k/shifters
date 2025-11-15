@@ -15,6 +15,10 @@ dependencies = [
     "uvicorn>=0.38.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["shifters*"]
+exclude = ["data*", "examples*"]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.4.0",
