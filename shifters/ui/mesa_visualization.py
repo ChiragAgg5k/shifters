@@ -133,19 +133,31 @@ def Leaderboard():
 @solara.component
 def Page():
     """Main Solara page component."""
-    # Auto-step if running
-    solara.use_effect(
-        lambda: schedule_step() if is_running.value else None,
-        dependencies=[is_running.value],
-    )
+    import asyncio
+    import threading
 
-    def schedule_step():
-        if current_model.value and current_model.value.running:
-            current_model.value.step()
+    def run_simulation_loop():
+        """Run the simulation in a loop."""
+        while is_running.value:
+            if current_model.value and current_model.value.running:
+                current_model.value.step()
 
-            # Check if race is finished
-            if not current_model.value.running:
-                is_running.value = False
+                # Check if race is finished
+                if not current_model.value.running:
+                    is_running.value = False
+                    break
+
+            # Sleep to control update rate
+            import time
+            time.sleep(0.1)  # 10 steps per second
+
+    # Start simulation loop when running changes
+    def start_loop():
+        if is_running.value and current_model.value:
+            thread = threading.Thread(target=run_simulation_loop, daemon=True)
+            thread.start()
+
+    solara.use_effect(start_loop, dependencies=[is_running.value])
 
     with solara.Column():
         solara.Title("🏎️ Shifters - Racing Simulator")
