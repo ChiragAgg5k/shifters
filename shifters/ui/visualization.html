@@ -531,6 +531,21 @@
             currentState = null;
         }
 
+        function formatTime(seconds) {
+            if (seconds === null || seconds === undefined || seconds < 0) {
+                return '-';
+            }
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 100);
+
+            if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            } else {
+                return `${secs}.${ms.toString().padStart(2, '0')}s`;
+            }
+        }
+
         function updateVisualization(state) {
             if (!state) return;
 
@@ -555,11 +570,13 @@
             // Update stats
             if (state.environment && state.environment.track) {
                 const track = state.environment.track;
-                document.getElementById('trackLengthStat').textContent = `${track.length}m`;
-                document.getElementById('totalDistanceStat').textContent = `${track.total_distance}m`;
+                const trackLengthKm = (track.length / 1000).toFixed(3);
+                const totalDistanceKm = (track.total_distance / 1000).toFixed(3);
+                document.getElementById('trackLengthStat').textContent = `${trackLengthKm} km`;
+                document.getElementById('totalDistanceStat').textContent = `${totalDistanceKm} km`;
             }
 
-            // Update leader speed in real-time
+            // Update leader speed and lap time in real-time
             if (state.standings && state.standings.length > 0) {
                 const leader = state.standings[0];
                 // Find the leader's full agent data to get speed
@@ -571,8 +588,18 @@
                 } else {
                     document.getElementById('leaderSpeed').textContent = '-';
                 }
+
+                // Update best lap time
+                if (leaderAgent && leaderAgent.best_lap_time !== undefined && leaderAgent.best_lap_time > 0) {
+                    document.getElementById('bestLapTime').textContent = formatTime(leaderAgent.best_lap_time);
+                } else if (leader.best_lap_time !== undefined && leader.best_lap_time > 0) {
+                    document.getElementById('bestLapTime').textContent = formatTime(leader.best_lap_time);
+                } else {
+                    document.getElementById('bestLapTime').textContent = '-';
+                }
             } else {
                 document.getElementById('leaderSpeed').textContent = '-';
+                document.getElementById('bestLapTime').textContent = '-';
             }
 
             // Draw track
