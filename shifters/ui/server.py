@@ -122,7 +122,8 @@ class SimulationManager:
         ]
 
         for i in range(num_agents):
-            max_speed = 180 + ((num_agents - 1 - i) * 5)
+            # F1-style performance characteristics
+            max_speed = 85 + ((num_agents - 1 - i) * 2)  # 85-95 m/s (306-342 km/h)
             acceleration = 12 + ((num_agents - 1 - i) * 0.5)
 
             vehicle = RacingVehicle(

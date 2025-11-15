@@ -15,7 +15,9 @@ print("F1 CIRCUIT COMPARISON")
 print("=" * 100)
 
 # Compare track characteristics
-print(f"\n{'Circuit':<25} {'Length (km)':<15} {'Corners':<10} {'Elev Gain (m)':<15} {'Max Banking':<12}")
+print(
+    f"\n{'Circuit':<25} {'Length (km)':<15} {'Corners':<10} {'Elev Gain (m)':<15} {'Max Banking':<12}"
+)
 print("-" * 100)
 
 for name, track in circuits.items():
@@ -33,6 +35,7 @@ print("\n" + "=" * 100)
 print("RACE SIMULATIONS (3 laps each)")
 print("=" * 100)
 
+
 # Create a standard F1 car profile
 def create_f1_car(sim, car_id: int, name: str):
     return RacingVehicle(
@@ -44,6 +47,7 @@ def create_f1_car(sim, car_id: int, name: str):
         cornering_skill=1.1,
         braking_rate=28.0,
     )
+
 
 results = {}
 
@@ -69,12 +73,12 @@ for circuit_name, track in circuits.items():
     finished = sim.leaderboard.get_finished_agents()
     if finished:
         winner = finished[0]
-        avg_lap_time = winner['total_time'] / track.num_laps
+        avg_lap_time = winner["total_time"] / track.num_laps
         results[circuit_name] = {
-            'winner_time': winner['total_time'],
-            'avg_lap_time': avg_lap_time,
-            'length': track.length,
-            'simulation_steps': sim.current_step,
+            "winner_time": winner["total_time"],
+            "avg_lap_time": avg_lap_time,
+            "length": track.length,
+            "simulation_steps": sim.current_step,
         }
 
         print(f"\n✓ Winner: {winner['name']}")
@@ -91,8 +95,8 @@ print(f"\n{'Circuit':<25} {'Avg Lap Time':<20} {'Length/Lap Ratio':<20}")
 print("-" * 100)
 
 for circuit_name, data in results.items():
-    lap_time = data['avg_lap_time']
-    length = data['length']
+    lap_time = data["avg_lap_time"]
+    length = data["length"]
     ratio = length / lap_time  # meters per second (average speed)
 
     print(
@@ -106,8 +110,8 @@ print("TRACK CHARACTERISTICS")
 print("=" * 100)
 
 # Which track is fastest/slowest
-fastest = min(results.items(), key=lambda x: x[1]['avg_lap_time'])
-slowest = max(results.items(), key=lambda x: x[1]['avg_lap_time'])
+fastest = min(results.items(), key=lambda x: x[1]["avg_lap_time"])
+slowest = max(results.items(), key=lambda x: x[1]["avg_lap_time"])
 
 print(f"\n⚡ Fastest Circuit: {fastest[0]}")
 print(f"   Average lap: {fastest[1]['avg_lap_time']:.2f}s")
@@ -124,9 +128,9 @@ print("=" * 100)
 
 for name, track in circuits.items():
     info = track.get_info()
-    corners = info.get('corners', 0)
-    elevation = info.get('elevation_gain', 0) + info.get('elevation_loss', 0)
-    length = info['length']
+    corners = info.get("corners", 0)
+    elevation = info.get("elevation_gain", 0) + info.get("elevation_loss", 0)
+    length = info["length"]
 
     # Simple difficulty score
     corner_density = (corners / length) * 1000  # corners per km

@@ -468,7 +468,11 @@ class Track:
                     "elevation_loss": round(total_elevation_loss, 2),
                     "max_banking": round(max_banking, 2),
                     "coordinates": [
-                        {"x": seg.start_point.x, "y": seg.start_point.y, "z": seg.start_point.z}
+                        {
+                            "x": seg.start_point.x,
+                            "y": seg.start_point.y,
+                            "z": seg.start_point.z,
+                        }
                         for seg in self.segments
                     ],
                 }

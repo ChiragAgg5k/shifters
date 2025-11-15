@@ -24,7 +24,9 @@ print(f"Maximum Banking: {info['max_banking']:.1f}°")
 print("\n" + "=" * 80)
 print("SEGMENT DETAILS")
 print("=" * 80)
-print(f"\n{'Segment':<30} {'Type':<12} {'Length':<10} {'Curve':<10} {'Banking':<10} {'Elevation':<12}")
+print(
+    f"\n{'Segment':<30} {'Type':<12} {'Length':<10} {'Curve':<10} {'Banking':<10} {'Elevation':<12}"
+)
 print("-" * 80)
 
 for segment in spa.segments:
@@ -97,7 +99,9 @@ for checkpoint in spa.checkpoints:
     print(f"\n{checkpoint.name or checkpoint.id}:")
     print(f"  Position: {checkpoint.position:.0f}m")
     if checkpoint.coordinates:
-        print(f"  Coordinates: ({checkpoint.coordinates.x:.1f}, {checkpoint.coordinates.y:.1f}, {checkpoint.coordinates.z:.1f})")
+        print(
+            f"  Coordinates: ({checkpoint.coordinates.x:.1f}, {checkpoint.coordinates.y:.1f}, {checkpoint.coordinates.z:.1f})"
+        )
 
 # Create custom track example
 print("\n" + "=" * 80)
@@ -106,8 +110,7 @@ print("=" * 80)
 
 builder = TrackBuilder()
 custom_track = (
-    builder
-    .add_straight(500, name="Main Straight")
+    builder.add_straight(500, name="Main Straight")
     .add_corner(80, 90, "right", banking=10, name="Turn 1")
     .add_straight(300, elevation_change=20, name="Uphill Section")
     .add_corner(60, 120, "left", banking=5, name="Hairpin")
@@ -126,9 +129,7 @@ print("OVAL TRACK EXAMPLE (NASCAR-style)")
 print("=" * 80)
 
 oval = F1TrackLibrary.create_simple_oval(
-    length=2500.0,  # 2.5km
-    width=18.0,      # Wide track
-    banking=18.0     # Heavy banking
+    length=2500.0, width=18.0, banking=18.0  # 2.5km  # Wide track  # Heavy banking
 )
 
 oval_info = oval.get_info()

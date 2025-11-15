@@ -108,8 +108,12 @@ class TrackBuilder:
         turn_multiplier = 1 if direction == "left" else -1
 
         # Calculate the center of the turn circle
-        center_offset_x = radius * math.cos(self.current_heading + turn_multiplier * math.pi / 2)
-        center_offset_y = radius * math.sin(self.current_heading + turn_multiplier * math.pi / 2)
+        center_offset_x = radius * math.cos(
+            self.current_heading + turn_multiplier * math.pi / 2
+        )
+        center_offset_y = radius * math.sin(
+            self.current_heading + turn_multiplier * math.pi / 2
+        )
 
         # Calculate end point
         new_heading = self.current_heading + turn_multiplier * angle_rad
@@ -255,7 +259,9 @@ class F1TrackLibrary:
         builder.add_corner(20, 110, "right", banking=-5, name="Mirabeau Haute")
 
         # Loews Hairpin (tightest corner in F1)
-        builder.add_corner(12, 180, "right", elevation_change=-8, name="Grand Hotel Hairpin")
+        builder.add_corner(
+            12, 180, "right", elevation_change=-8, name="Grand Hotel Hairpin"
+        )
 
         # Portier and Tunnel
         builder.add_corner(25, 85, "left", name="Portier")
@@ -299,8 +305,12 @@ class F1TrackLibrary:
 
         # Eau Rouge - Raidillon complex (iconic uphill section)
         builder.add_straight(180, name="Kemmel Straight Approach")
-        builder.add_corner(200, 45, "left", elevation_change=35, banking=8, name="Eau Rouge")
-        builder.add_corner(220, 35, "right", elevation_change=15, banking=5, name="Raidillon")
+        builder.add_corner(
+            200, 45, "left", elevation_change=35, banking=8, name="Eau Rouge"
+        )
+        builder.add_corner(
+            220, 35, "right", elevation_change=15, banking=5, name="Raidillon"
+        )
 
         # Kemmel Straight (longest straight in F1)
         builder.add_straight(750, name="Kemmel Straight")

@@ -9,7 +9,7 @@ from shifters.environment.track import Track, TrackSegment, Point3D, Checkpoint
 class GeoJSONTrackParser:
     """
     Parse GeoJSON data to create Track objects with real geographic coordinates.
-    
+
     Supports:
     - Single Feature with LineString/MultiLineString geometry
     - FeatureCollection with multiple circuit features
@@ -19,9 +19,7 @@ class GeoJSONTrackParser:
     EARTH_RADIUS = 6371000.0
 
     @staticmethod
-    def haversine_distance(
-        lat1: float, lon1: float, lat2: float, lon2: float
-    ) -> float:
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
         Calculate distance between two geographic coordinates using Haversine formula.
 
@@ -70,15 +68,17 @@ class GeoJSONTrackParser:
         delta_lat = math.radians(lat - origin_lat)
 
         # Equirectangular projection
-        x = delta_lon * math.cos((origin_lat_rad + lat_rad) / 2) * GeoJSONTrackParser.EARTH_RADIUS
+        x = (
+            delta_lon
+            * math.cos((origin_lat_rad + lat_rad) / 2)
+            * GeoJSONTrackParser.EARTH_RADIUS
+        )
         y = delta_lat * GeoJSONTrackParser.EARTH_RADIUS
 
         return x, y
 
     @staticmethod
-    def calculate_bearing(
-        lat1: float, lon1: float, lat2: float, lon2: float
-    ) -> float:
+    def calculate_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
         Calculate bearing between two points.
 
@@ -103,7 +103,9 @@ class GeoJSONTrackParser:
 
     @staticmethod
     def detect_segment_type(
-        prev_bearing: Optional[float], curr_bearing: float, next_bearing: Optional[float]
+        prev_bearing: Optional[float],
+        curr_bearing: float,
+        next_bearing: Optional[float],
     ) -> str:
         """
         Detect if segment is straight or a turn based on bearing changes.
@@ -138,9 +140,7 @@ class GeoJSONTrackParser:
             return "right_turn"
 
     @staticmethod
-    def calculate_curvature(
-        p1: Point3D, p2: Point3D, p3: Point3D
-    ) -> float:
+    def calculate_curvature(p1: Point3D, p2: Point3D, p3: Point3D) -> float:
         """
         Estimate radius of curvature from three consecutive points.
 
@@ -260,6 +260,7 @@ class GeoJSONTrackParser:
 
         if track_name is None:
             import os
+
             track_name = os.path.splitext(os.path.basename(filepath))[0]
 
         return cls.from_geojson(geojson_data, track_name, num_laps, track_width)
@@ -413,7 +414,9 @@ class GeoJSONTrackParser:
             )
 
     @classmethod
-    def list_circuits_in_collection(cls, geojson_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def list_circuits_in_collection(
+        cls, geojson_data: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         List all circuits in a FeatureCollection.
 
@@ -424,21 +427,25 @@ class GeoJSONTrackParser:
             List of circuit info dicts with 'id', 'name', 'location', 'length', etc.
         """
         if geojson_data.get("type") != "FeatureCollection":
-            raise ValueError("Expected FeatureCollection, got {}".format(geojson_data.get("type")))
+            raise ValueError(
+                "Expected FeatureCollection, got {}".format(geojson_data.get("type"))
+            )
 
         circuits = []
         for feature in geojson_data.get("features", []):
             props = feature.get("properties", {})
-            circuits.append({
-                "id": props.get("id"),
-                "name": props.get("Name"),
-                "location": props.get("Location"),
-                "length": props.get("length"),
-                "altitude": props.get("altitude"),
-                "opened": props.get("opened"),
-                "firstgp": props.get("firstgp"),
-            })
-        
+            circuits.append(
+                {
+                    "id": props.get("id"),
+                    "name": props.get("Name"),
+                    "location": props.get("Location"),
+                    "length": props.get("length"),
+                    "altitude": props.get("altitude"),
+                    "opened": props.get("opened"),
+                    "firstgp": props.get("firstgp"),
+                }
+            )
+
         return circuits
 
     @classmethod
@@ -477,7 +484,7 @@ class GeoJSONTrackParser:
         feature = None
         for f in geojson_data.get("features", []):
             props = f.get("properties", {})
-            
+
             if circuit_id and props.get("id") == circuit_id:
                 feature = f
                 break
@@ -499,10 +506,12 @@ class GeoJSONTrackParser:
         single_feature_geojson = {
             "type": "Feature",
             "properties": props,
-            "geometry": feature.get("geometry")
+            "geometry": feature.get("geometry"),
         }
 
-        return cls.from_geojson(single_feature_geojson, track_name, num_laps, track_width)
+        return cls.from_geojson(
+            single_feature_geojson, track_name, num_laps, track_width
+        )
 
     @classmethod
     def from_feature_collection_file(
@@ -565,7 +574,10 @@ class GeoJSONTrackParser:
 
             try:
                 track = cls.from_feature_collection(
-                    geojson_data, circuit_id=circuit_id, num_laps=num_laps, track_width=track_width
+                    geojson_data,
+                    circuit_id=circuit_id,
+                    num_laps=num_laps,
+                    track_width=track_width,
                 )
                 tracks[circuit_id] = track
                 print(f"Loaded: {circuit_name} ({circuit_id})")

@@ -325,7 +325,6 @@
                 <div class="config-item">
                     <label>Circuit Selection</label>
                     <select id="circuitSelect" onchange="updateTrackConfig()">
-                        <option value="custom">Custom Track</option>
                     </select>
                 </div>
                 <div class="config-item">
@@ -398,6 +397,10 @@
                         <div class="stat-row">
                             <span class="stat-label">Leader Lap Time</span>
                             <span class="stat-value" id="bestLapTime">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Leader Speed</span>
+                            <span class="stat-value" id="leaderSpeed">-</span>
                         </div>
                     </div>
                 </div>
@@ -556,6 +559,22 @@
                 document.getElementById('totalDistanceStat').textContent = `${track.total_distance}m`;
             }
 
+            // Update leader speed in real-time
+            if (state.standings && state.standings.length > 0) {
+                const leader = state.standings[0];
+                // Find the leader's full agent data to get speed
+                const leaderAgent = state.agents ? state.agents.find(a => a.name === leader.name) : null;
+                if (leaderAgent && leaderAgent.speed !== undefined) {
+                    // Convert from m/s to km/h (multiply by 3.6)
+                    const speedKmh = leaderAgent.speed * 3.6;
+                    document.getElementById('leaderSpeed').textContent = `${speedKmh.toFixed(2)} km/h`;
+                } else {
+                    document.getElementById('leaderSpeed').textContent = '-';
+                }
+            } else {
+                document.getElementById('leaderSpeed').textContent = '-';
+            }
+
             // Draw track
             drawTrack(state);
 
@@ -627,40 +646,40 @@
         function drawGeoJSONTrack(state) {
             const track = state.environment.track;
             const coords = track.coordinates;
-            
+
             // Calculate bounding box for scaling
             const minX = Math.min(...coords.map(c => c.x));
             const maxX = Math.max(...coords.map(c => c.x));
             const minY = Math.min(...coords.map(c => c.y));
             const maxY = Math.max(...coords.map(c => c.y));
-            
+
             const padding = 60;
             const availableWidth = canvas.width - 2 * padding;
             const availableHeight = canvas.height - 2 * padding;
-            
+
             const trackWidth = maxX - minX;
             const trackHeight = maxY - minY;
-            
+
             // Calculate scale to fit track in canvas
             const scale = Math.min(availableWidth / trackWidth, availableHeight / trackHeight);
-            
+
             // Center the track
             const offsetX = padding + (availableWidth - trackWidth * scale) / 2;
             const offsetY = padding + (availableHeight - trackHeight * scale) / 2;
-            
+
             // Transform function
             const transform = (coord) => ({
                 x: offsetX + (coord.x - minX) * scale,
                 y: offsetY + (coord.y - minY) * scale
             });
-            
+
             // Draw track outline
             ctx.strokeStyle = '#444';
             ctx.lineWidth = 40;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.beginPath();
-            
+
             const transformedCoords = coords.map(transform);
             if (transformedCoords.length > 0) {
                 ctx.moveTo(transformedCoords[0].x, transformedCoords[0].y);
@@ -673,7 +692,7 @@
                 }
             }
             ctx.stroke();
-            
+
             // Draw track center line
             ctx.strokeStyle = '#666';
             ctx.lineWidth = 2;
@@ -690,19 +709,19 @@
             }
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             // Draw start/finish line
             if (transformedCoords.length > 0) {
                 const start = transformedCoords[0];
                 const next = transformedCoords[1] || transformedCoords[0];
-                
+
                 // Calculate perpendicular direction for start line
                 const dx = next.x - start.x;
                 const dy = next.y - start.y;
                 const length = Math.sqrt(dx * dx + dy * dy);
                 const perpX = -dy / length * 20;
                 const perpY = dx / length * 20;
-                
+
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 6;
                 ctx.beginPath();
@@ -710,7 +729,7 @@
                 ctx.lineTo(start.x + perpX, start.y + perpY);
                 ctx.stroke();
             }
-            
+
             // Build cumulative distance array for agent positioning
             const distances = [0];
             for (let i = 1; i < coords.length; i++) {
@@ -719,12 +738,12 @@
                 const segmentDist = Math.sqrt(dx * dx + dy * dy);
                 distances.push(distances[i-1] + segmentDist);
             }
-            
+
             // Draw agents on GeoJSON track
             state.agents.forEach((agent, index) => {
                 const progress = agent.position / track.length;
                 const targetDist = progress * distances[distances.length - 1];
-                
+
                 // Find which segment the agent is on
                 let segmentIndex = 0;
                 for (let i = 1; i < distances.length; i++) {
@@ -733,18 +752,18 @@
                         break;
                     }
                 }
-                
+
                 // Interpolate position within segment
                 const segStart = distances[segmentIndex];
                 const segEnd = distances[segmentIndex + 1] || distances[segmentIndex];
                 const segProgress = (segEnd - segStart) > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0;
-                
+
                 const coord1 = coords[segmentIndex];
                 const coord2 = coords[(segmentIndex + 1) % coords.length];
-                
+
                 const agentX = coord1.x + (coord2.x - coord1.x) * segProgress;
                 const agentY = coord1.y + (coord2.y - coord1.y) * segProgress;
-                
+
                 const transformed = transform({ x: agentX, y: agentY });
                 drawAgent(agent, index, transformed.x, transformed.y);
             });
@@ -820,10 +839,7 @@
 
         function populateCircuitDropdown(circuits) {
             const select = document.getElementById('circuitSelect');
-            
-            // Clear existing options except "Custom Track"
-            select.innerHTML = '<option value="custom">Custom Track</option>';
-            
+
             // Add F1 circuits
             circuits.forEach(circuit => {
                 const option = document.createElement('option');
@@ -847,7 +863,7 @@
                 // Disable inputs for F1 circuits - they'll be loaded from GeoJSON
                 trackLengthInput.disabled = true;
                 trackNameInput.readOnly = true;
-                
+
                 // Find selected circuit to display its name
                 const select = document.getElementById('circuitSelect');
                 const selectedOption = select.options[select.selectedIndex];

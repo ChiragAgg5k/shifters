@@ -27,6 +27,7 @@ print("-" * 80)
 
 with open(CIRCUITS_FILE, "r") as f:
     import json
+
     geojson_data = json.load(f)
 
 circuits = GeoJSONTrackParser.list_circuits_in_collection(geojson_data)
@@ -42,12 +43,14 @@ print("-" * 80)
 monaco = GeoJSONTrackParser.from_feature_collection_file(
     CIRCUITS_FILE,
     circuit_id="mc-1929",  # Monaco GP
-    num_laps=78  # Actual Monaco GP lap count
+    num_laps=78,  # Actual Monaco GP lap count
 )
 
 print(f"\nLoaded: {monaco.name}")
 print(f"  Length: {monaco.length/1000:.2f}km")
-print(f"  Total distance: {monaco.length * monaco.num_laps / 1000:.2f}km ({monaco.num_laps} laps)")
+print(
+    f"  Total distance: {monaco.length * monaco.num_laps / 1000:.2f}km ({monaco.num_laps} laps)"
+)
 print(f"  Segments: {len(monaco.segments)}")
 
 # Example 3: Load circuit by name
@@ -57,12 +60,14 @@ print("-" * 80)
 spa = GeoJSONTrackParser.from_feature_collection_file(
     CIRCUITS_FILE,
     circuit_name="Circuit de Spa-Francorchamps",
-    num_laps=44  # Actual Spa GP lap count
+    num_laps=44,  # Actual Spa GP lap count
 )
 
 print(f"\nLoaded: {spa.name}")
 print(f"  Length: {spa.length/1000:.2f}km")
-print(f"  Total distance: {spa.length * spa.num_laps / 1000:.2f}km ({spa.num_laps} laps)")
+print(
+    f"  Total distance: {spa.length * spa.num_laps / 1000:.2f}km ({spa.num_laps} laps)"
+)
 print(f"  Segments: {len(spa.segments)}")
 
 # Example 4: Analyze Monaco GP track
@@ -75,7 +80,9 @@ monaco_short = GeoJSONTrackParser.from_feature_collection_file(
 
 # Count different segment types
 left_turns = sum(1 for seg in monaco_short.segments if seg.segment_type == "left_turn")
-right_turns = sum(1 for seg in monaco_short.segments if seg.segment_type == "right_turn")
+right_turns = sum(
+    1 for seg in monaco_short.segments if seg.segment_type == "right_turn"
+)
 straights = sum(1 for seg in monaco_short.segments if seg.segment_type == "straight")
 
 print(f"\n{monaco_short.name} Track Breakdown:")
@@ -87,15 +94,17 @@ print(f"  Straight sections: {straights}")
 # Find tightest corners
 tight_corners = sorted(
     [seg for seg in monaco_short.segments if seg.curvature > 0],
-    key=lambda s: s.curvature
+    key=lambda s: s.curvature,
 )[:3]
 
 print(f"\n  Tightest 3 Corners:")
 for i, seg in enumerate(tight_corners, 1):
     direction = "Left" if seg.segment_type == "left_turn" else "Right"
     max_speed = seg.get_recommended_speed(base_speed=100.0)  # 100 m/s base speed
-    print(f"    {i}. {direction} - Radius: {seg.curvature:.1f}m, "
-          f"Max speed: {max_speed:.1f} m/s ({max_speed * 3.6:.1f} km/h)")
+    print(
+        f"    {i}. {direction} - Radius: {seg.curvature:.1f}m, "
+        f"Max speed: {max_speed:.1f} m/s ({max_speed * 3.6:.1f} km/h)"
+    )
 
 # Calculate average lap time estimate
 total_time = 0
@@ -106,7 +115,9 @@ for seg in monaco_short.segments:
         time = seg.length / max_speed
         total_time += time
 
-print(f"\n  Estimated lap time (at speed limits): {total_time:.1f}s ({total_time/60:.2f} minutes)")
+print(
+    f"\n  Estimated lap time (at speed limits): {total_time:.1f}s ({total_time/60:.2f} minutes)"
+)
 
 # Example 5: Compare different circuits
 print("\n\n5. CIRCUIT COMPARISON")
@@ -124,39 +135,44 @@ print("-" * 80)
 
 for circuit_id, circuit_name in comparison_circuits:
     track = GeoJSONTrackParser.from_feature_collection_file(
-        CIRCUITS_FILE,
-        circuit_id=circuit_id,
-        num_laps=1
+        CIRCUITS_FILE, circuit_id=circuit_id, num_laps=1
     )
-    
-    corners = sum(1 for seg in track.segments if seg.segment_type in ["left_turn", "right_turn"])
+
+    corners = sum(
+        1 for seg in track.segments if seg.segment_type in ["left_turn", "right_turn"]
+    )
     straights = sum(1 for seg in track.segments if seg.segment_type == "straight")
-    
-    print(f"{track.name:<40} "
-          f"{track.length/1000:.2f}km{'':<5} "
-          f"{len(track.segments):<10} "
-          f"{corners:<10}")
+
+    print(
+        f"{track.name:<40} "
+        f"{track.length/1000:.2f}km{'':<5} "
+        f"{len(track.segments):<10} "
+        f"{corners:<10}"
+    )
 
 # Example 6: Track profile analysis
 print("\n\n6. DETAILED TRACK PROFILE - SPA-FRANCORCHAMPS")
 print("-" * 80)
 
 # Get detailed segment information
-corner_segments = [seg for seg in spa.segments if seg.segment_type in ["left_turn", "right_turn"]]
+corner_segments = [
+    seg for seg in spa.segments if seg.segment_type in ["left_turn", "right_turn"]
+]
 straight_segments = [seg for seg in spa.segments if seg.segment_type == "straight"]
 
 # Find tightest corners (smallest radius)
 tight_corners = sorted(
-    [seg for seg in corner_segments if seg.curvature > 0],
-    key=lambda s: s.curvature
+    [seg for seg in corner_segments if seg.curvature > 0], key=lambda s: s.curvature
 )[:5]
 
 print(f"\nTop 5 Tightest Corners:")
 for i, seg in enumerate(tight_corners, 1):
     direction = "Left" if seg.segment_type == "left_turn" else "Right"
     max_speed = seg.get_recommended_speed(base_speed=100.0)
-    print(f"  {i}. {direction} turn - Radius: {seg.curvature:.1f}m, "
-          f"Recommended speed: {max_speed:.1f} m/s")
+    print(
+        f"  {i}. {direction} turn - Radius: {seg.curvature:.1f}m, "
+        f"Recommended speed: {max_speed:.1f} m/s"
+    )
 
 # Find longest straights
 long_straights = sorted(straight_segments, key=lambda s: s.length, reverse=True)[:3]
@@ -166,8 +182,12 @@ for i, seg in enumerate(long_straights, 1):
     print(f"  {i}. {seg.length:.1f}m")
 
 # Calculate elevation changes
-elevation_gain = sum(seg.elevation_change for seg in spa.segments if seg.elevation_change > 0)
-elevation_loss = sum(abs(seg.elevation_change) for seg in spa.segments if seg.elevation_change < 0)
+elevation_gain = sum(
+    seg.elevation_change for seg in spa.segments if seg.elevation_change > 0
+)
+elevation_loss = sum(
+    abs(seg.elevation_change) for seg in spa.segments if seg.elevation_change < 0
+)
 
 print(f"\nElevation Profile:")
 print(f"  Total climb: {elevation_gain:.1f}m")
@@ -176,7 +196,8 @@ print(f"  Total descent: {elevation_loss:.1f}m")
 print("\n" + "=" * 80)
 print("USAGE GUIDE")
 print("=" * 80)
-print("""
+print(
+    """
 To use any F1 circuit in your simulations:
 
 1. Load by ID:
@@ -202,6 +223,7 @@ Available circuits include:
   - Historic circuits (Indianapolis, Imola, etc.)
   - Future circuits (Las Vegas 2023, Madrid 2026)
   - Total: 40 real F1 circuits
-""")
+"""
+)
 
 print("\n" + "=" * 80)

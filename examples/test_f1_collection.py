@@ -12,6 +12,7 @@ print("=" * 80)
 
 with open(circuits_file, "r") as f:
     import json
+
     geojson_data = json.load(f)
 
 circuits = GeoJSONTrackParser.list_circuits_in_collection(geojson_data)
@@ -40,20 +41,22 @@ for circuit_id, expected_name in test_circuits:
     print(f"\nLoading: {expected_name} ({circuit_id})")
     try:
         track = GeoJSONTrackParser.from_feature_collection_file(
-            circuits_file,
-            circuit_id=circuit_id,
-            num_laps=10
+            circuits_file, circuit_id=circuit_id, num_laps=10
         )
-        
+
         print(f"  ✓ Successfully loaded!")
         print(f"  ✓ Track name: {track.name}")
         print(f"  ✓ Length: {track.length:.2f}m ({track.length/1000:.2f}km)")
         print(f"  ✓ Segments: {len(track.segments)}")
-        
+
         # Count corners
-        corners = sum(1 for seg in track.segments if seg.segment_type in ["left_turn", "right_turn"])
+        corners = sum(
+            1
+            for seg in track.segments
+            if seg.segment_type in ["left_turn", "right_turn"]
+        )
         print(f"  ✓ Corners: {corners}")
-        
+
     except Exception as e:
         print(f"  ✗ Failed: {e}")
 
@@ -72,7 +75,9 @@ print("CIRCUIT STATISTICS")
 print("=" * 80)
 
 for circuit_id, track in sorted(all_tracks.items()):
-    corners = sum(1 for seg in track.segments if seg.segment_type in ["left_turn", "right_turn"])
+    corners = sum(
+        1 for seg in track.segments if seg.segment_type in ["left_turn", "right_turn"]
+    )
     print(f"\n{track.name}:")
     print(f"  Length: {track.length/1000:.3f}km")
     print(f"  Segments: {len(track.segments)}")

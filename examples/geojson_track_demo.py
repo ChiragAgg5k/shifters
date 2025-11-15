@@ -40,7 +40,7 @@ if os.path.exists(monaco_path):
     print(f"  Segments: {info['num_segments']}")
     print(f"  Corners: {info.get('corners', 'N/A')}")
     print(f"  Straights: {info.get('straights', 'N/A')}")
-    if info.get('elevation_gain'):
+    if info.get("elevation_gain"):
         print(f"  Elevation Gain: {info['elevation_gain']:.1f}m")
         print(f"  Elevation Loss: {info['elevation_loss']:.1f}m")
 
@@ -204,12 +204,12 @@ print(f"  Segments: {len(custom_track.segments)}")
 print("\n  Position to Coordinate mapping (every 100m):")
 print(f"  {'Distance (m)':<15} {'X (m)':<15} {'Y (m)':<15} {'Z (m)':<15}")
 print("  " + "-" * 60)
-for dist in range(0, int(custom_track.length) + 1, max(1, int(custom_track.length / 5))):
+for dist in range(
+    0, int(custom_track.length) + 1, max(1, int(custom_track.length / 5))
+):
     coords = custom_track.get_coordinates_at_position(dist)
     if coords:
-        print(
-            f"  {dist:<15.1f} {coords.x:<15.2f} {coords.y:<15.2f} {coords.z:<15.2f}"
-        )
+        print(f"  {dist:<15.1f} {coords.x:<15.2f} {coords.y:<15.2f} {coords.z:<15.2f}")
 
 print("\n" + "=" * 100)
 print("GEOJSON IMPORT COMPLETE!")
