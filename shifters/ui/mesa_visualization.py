@@ -9,6 +9,7 @@ from shifters import MobilitySimulation, Track, RacingVehicle
 # Global model instance for the Solara app
 current_model = solara.reactive(None)
 is_running = solara.reactive(False)
+step_counter = solara.reactive(0)  # Used to trigger re-renders
 
 
 def create_model(num_agents: int = 5, track_length: float = 1000, num_laps: int = 3):
@@ -52,6 +53,7 @@ def RaceControls():
         model = create_model(num_agents.value, track_length.value, num_laps.value)
         model.start_race()
         current_model.value = model
+        step_counter.value = 0  # Reset counter
         is_running.value = True
 
     def stop_race():
@@ -83,6 +85,7 @@ def RaceControls():
 def RaceStats():
     """Display race statistics."""
     model = current_model.value
+    _ = step_counter.value  # Force re-render when step_counter changes
 
     if model is None:
         with solara.Card("Race Statistics"):
@@ -105,6 +108,7 @@ def RaceStats():
 def Leaderboard():
     """Display live leaderboard."""
     model = current_model.value
+    _ = step_counter.value  # Force re-render when step_counter changes
 
     if model is None:
         with solara.Card("🏁 Live Leaderboard"):
@@ -133,19 +137,34 @@ def Leaderboard():
 @solara.component
 def Page():
     """Main Solara page component."""
-    # Auto-step if running
-    solara.use_effect(
-        lambda: schedule_step() if is_running.value else None,
-        dependencies=[is_running.value],
-    )
+    import asyncio
+    import threading
 
-    def schedule_step():
-        if current_model.value and current_model.value.running:
-            current_model.value.step()
+    def run_simulation_loop():
+        """Run the simulation in a loop."""
+        while is_running.value:
+            if current_model.value and current_model.value.running:
+                current_model.value.step()
+                # Increment counter to trigger Solara re-renders
+                step_counter.value += 1
 
-            # Check if race is finished
-            if not current_model.value.running:
-                is_running.value = False
+                # Check if race is finished
+                if not current_model.value.running:
+                    is_running.value = False
+                    break
+
+            # Sleep to control update rate
+            import time
+
+            time.sleep(0.1)  # 10 steps per second
+
+    # Start simulation loop when running changes
+    def start_loop():
+        if is_running.value and current_model.value:
+            thread = threading.Thread(target=run_simulation_loop, daemon=True)
+            thread.start()
+
+    solara.use_effect(start_loop, dependencies=[is_running.value])
 
     with solara.Column():
         solara.Title("🏎️ Shifters - Racing Simulator")
