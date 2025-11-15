@@ -127,45 +127,50 @@ export class RacingVehicle {
 
   /**
    * Calculate target speed based on track curvature, weather, and vehicle state
+   * Matches Python backend: base_agent.py _calculate_target_speed()
    */
-  calculateTargetSpeed(curvature: number, weather: string, trackTemp: number): void {
+  calculateTargetSpeed(curvature: number, weather: string, _trackTemp: number): void {
     this.currentCurvature = curvature
     
-    // Base speed calculation
+    // Base speed calculation (from parent class)
     if (curvature === 0) {
-      // Straight: full speed
       this.targetSpeed = this.maxSpeed
     } else {
-      // Corner: speed based on curvature and cornering skill
       const baseCornerSpeed = this.maxSpeed / (1 + curvature * 10)
-      this.targetSpeed = baseCornerSpeed * this.corneringSkill
+      this.targetSpeed = baseCornerSpeed
     }
     
     // Weather effects on grip
     let gripMultiplier = 1.0
     if (weather === 'rain') {
-      gripMultiplier = 0.85 // 15% grip loss in rain
+      gripMultiplier = 0.7 // 30% less grip in rain
     } else if (weather === 'wet') {
-      gripMultiplier = 0.92 // 8% grip loss on wet track
+      gripMultiplier = 0.85 // 15% less grip on wet track
     }
     
-    // Tire temperature effects
-    const optimalTireTemp = 90
-    const tempDiff = Math.abs(this.tireTemperature - optimalTireTemp)
-    const tireGripMultiplier = 1.0 - (tempDiff / 200) // Lose grip when too cold/hot
+    // Tire temperature effects (optimal: 80-100°C) - DISCRETE thresholds like Python
+    if (this.tireTemperature < 60) {
+      gripMultiplier *= 0.9 // Cold tires
+    } else if (this.tireTemperature > 110) {
+      gripMultiplier *= 0.85 // Overheated tires
+    }
     
-    // Downforce contribution to cornering speed
-    const downforceBonus = curvature > 0 ? (this.downforceCoefficient * 0.05) : 0
-    
-    // Damage reduces cornering ability
-    const damageMultiplier = 1.0 - (this.damageLevel / 200)
-    
-    // Apply all multipliers
-    this.targetSpeed *= gripMultiplier * tireGripMultiplier * (1 + downforceBonus) * damageMultiplier
-    
-    // Energy limit
-    if (this.energy < 10) {
-      this.targetSpeed *= 0.8 // Reduced power mode
+    // Downforce increases cornering speed at high speeds (only in corners)
+    if (curvature > 0) {
+      // Base cornering skill
+      const skillFactor = this.corneringSkill * gripMultiplier
+      
+      // Downforce effect (more effective at higher speeds)
+      const speedRatio = this.speed / this.maxSpeed
+      const downforceFactor = 1.0 + (this.downforceCoefficient * 0.1 * speedRatio)
+      
+      // Damage reduces cornering ability
+      const damageFactor = 1.0 - (this.damageLevel * 0.003) // Up to 30% reduction at 100% damage
+      
+      this.targetSpeed *= skillFactor * downforceFactor * damageFactor
+    } else {
+      // On straights, just apply grip multiplier
+      this.targetSpeed *= gripMultiplier
     }
   }
 
@@ -176,8 +181,8 @@ export class RacingVehicle {
     // Driver consistency variation
     const lapTimeVariation = this.lapTimeStd * (Math.random() * 2 - 1)
     
-    // Overtake penalty
-    const overtakePenalty = this.overtakenThisLap ? 0.5 : 0
+    // Overtake penalty (0.4s for taking inferior line) - matches Python backend
+    const overtakePenalty = this.overtakenThisLap ? 0.4 : 0
     this.overtakenThisLap = false
     
     // Aerodynamic drag: F_drag = 0.5 * ρ * Cd * A * v²
@@ -194,8 +199,7 @@ export class RacingVehicle {
       dragForce *= 0.70
     }
     
-    // Downforce: F_downforce = 0.5 * ρ * Cl * A * v²
-    const downforce = 0.5 * airDensity * this.downforceCoefficient * this.frontalArea * (this.speed ** 2)
+    // Downforce: F_downforce = 0.5 * ρ * Cl * A * v² (provides grip in corners)
     
     // Drag reduces acceleration
     const dragDeceleration = dragForce / this.mass
@@ -220,7 +224,6 @@ export class RacingVehicle {
     let movement = baseMovement + variationDistance + penaltyDistance
     movement = Math.max(0, movement)
     
-    const oldPosition = this.position
     this.position += movement
     this.distanceTraveled += movement
     
@@ -239,41 +242,48 @@ export class RacingVehicle {
     const energyConsumption = (speedFactor * 0.01 + accelFactor * 0.005 + dragFactor * 0.002) * timeStep
     this.energy = Math.max(0, this.energy - energyConsumption)
     
-    // Tire wear
+    // Tire wear (cornering, braking, high speed, and dirty air) - matches Python backend
     if (this.currentCurvature > 0) {
-      let wearRate = this.currentCurvature * 0.05 * timeStep
-      
-      // Dirty air increases tire wear
+      let wearRate = (this.speed / this.maxSpeed) * 0.001 * timeStep
+      // Dirty air increases tire wear by 10% (F1-metrics inspired)
       if (this.inSlipstream) {
-        wearRate *= 1.3
+        wearRate *= 1.1
       }
-      
-      this.tireWear = Math.min(100, this.tireWear + wearRate)
+      this.tireWear = Math.min(100.0, this.tireWear + wearRate)
     }
     
-    // High speed wear
-    if (this.speed > this.maxSpeed * 0.9) {
-      this.tireWear = Math.min(100, this.tireWear + 0.01 * timeStep)
+    // Hard braking increases tire wear
+    if (this.speed > this.targetSpeed) {
+      const brakingFactor = Math.abs(this.speed - this.targetSpeed) / this.maxSpeed
+      const brakeWear = brakingFactor * 0.0005 * timeStep
+      this.tireWear = Math.min(100.0, this.tireWear + brakeWear)
     }
     
-    // Tire temperature management
-    if (this.speed > this.maxSpeed * 0.7 || this.currentCurvature > 0) {
-      // Heating
-      const heatingRate = (this.speed / this.maxSpeed) * 2.0 * timeStep
-      this.tireTemperature = Math.min(120, this.tireTemperature + heatingRate)
-    } else {
-      // Cooling
-      const ambientTemp = 25
-      const coolingRate = 0.5 * timeStep
-      if (this.tireTemperature > ambientTemp) {
-        this.tireTemperature = Math.max(ambientTemp, this.tireTemperature - coolingRate)
+    // Tire temperature management - matches Python backend
+    // Tires heat up with use (any speed > 0)
+    if (this.speed > 0) {
+      let heatRate = (this.speed / this.maxSpeed) * 2.0 * timeStep
+      if (this.currentCurvature > 0) {
+        heatRate *= 1.5 // Cornering generates more heat
       }
+      this.tireTemperature = Math.min(120.0, this.tireTemperature + heatRate)
     }
     
-    // Random damage from aggressive cornering
+    // Tires cool down naturally (will be enhanced by weather in RaceSimulation)
+    const ambientTemp = 25
+    const coolingRate = (this.tireTemperature - ambientTemp) * 0.01 * timeStep
+    this.tireTemperature = Math.max(ambientTemp, this.tireTemperature - coolingRate)
+    
+    // Reduced performance with tire wear - matches Python backend
+    if (this.tireWear > 50) {
+      const wearPenalty = (this.tireWear - 50) / 50 // 0 to 1
+      this.corneringSkill = Math.max(0.7, 1.0 - wearPenalty * 0.3)
+    }
+    
+    // Damage accumulation (random events, hard cornering)
     if (this.currentCurvature > 0 && this.speed > this.maxSpeed * 0.9) {
-      if (Math.random() < 0.0001) {
-        this.damageLevel = Math.min(100, this.damageLevel + Math.random() * 4 + 1)
+      if (Math.random() < 0.0001) { // 0.01% chance per step
+        this.damageLevel = Math.min(100.0, this.damageLevel + Math.random() * 4 + 1)
       }
     }
     
@@ -358,7 +368,7 @@ export class RacingVehicle {
   /**
    * Check if vehicle can overtake another
    */
-  canOvertake(other: RacingVehicle, trackLength: number): boolean {
+  canOvertake(other: RacingVehicle, _trackLength: number): boolean {
     // Calculate pace advantage
     const paceAdvantage = this.speed - other.speed
     

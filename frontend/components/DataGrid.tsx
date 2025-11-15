@@ -74,12 +74,12 @@ export function DataGrid({ raceState }: DataGridProps) {
                     <div className="flex-1">
                       <div className="font-medium text-foreground flex items-center gap-2">
                         {agent.name}
-                        {agent.drs_active && (
+                        {agent.drsActive && (
                           <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
                             DRS
                           </span>
                         )}
-                        {agent.in_slipstream && (
+                        {agent.inSlipstream && (
                           <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
                             SLIP
                           </span>
@@ -93,14 +93,14 @@ export function DataGrid({ raceState }: DataGridProps) {
                           🔋 {agent.energy?.toFixed(0) || 0}%
                         </span>
                         <span className="text-muted-foreground">
-                          🛞 {(100 - (agent.tire_wear || 0)).toFixed(0)}%
+                          🛞 {(100 - (agent.tireWear || 0)).toFixed(0)}%
                         </span>
                         <span className="text-muted-foreground">
-                          🌡️ {agent.tire_temperature?.toFixed(0) || 0}°C
+                          🌡️ {agent.tireTemperature?.toFixed(0) || 0}°C
                         </span>
-                        {(agent.damage_level || 0) > 0 && (
+                        {(agent.damageLevel || 0) > 0 && (
                           <span className="text-red-400">
-                            💥 {agent.damage_level?.toFixed(0)}%
+                            💥 {agent.damageLevel?.toFixed(0)}%
                           </span>
                         )}
                       </div>
@@ -122,14 +122,14 @@ export function DataGrid({ raceState }: DataGridProps) {
       </div>
 
       {/* Safety Car Status */}
-      {raceState?.safety_car?.active && (
+      {raceState?.safetyCar?.active && (
         <div className="bg-yellow-500/10 border-2 border-yellow-500 rounded-lg p-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl">🚨</span>
             <div>
               <h3 className="text-lg font-bold text-yellow-400">SAFETY CAR</h3>
               <p className="text-sm text-yellow-300">
-                {raceState.safety_car.laps_remaining} laps remaining
+                {raceState.safetyCar.duration} laps remaining
               </p>
             </div>
           </div>
@@ -149,13 +149,13 @@ export function DataGrid({ raceState }: DataGridProps) {
           <div className="flex justify-between items-center py-3 border-b border-border">
             <span className="text-sm text-muted-foreground">Total Distance</span>
             <span className="font-bold text-primary">
-              {track ? `${(track.total_distance / 1000).toFixed(3)} km` : '-'}
+              {track ? `${((track.length * track.numLaps) / 1000).toFixed(3)} km` : '-'}
             </span>
           </div>
           <div className="flex justify-between items-center py-3 border-b border-border">
             <span className="text-sm text-muted-foreground">Leader Lap Time</span>
             <span className="font-bold text-primary">
-              {sortedAgents[0]?.best_lap_time ? formatTime(sortedAgents[0].best_lap_time) : '-'}
+              {sortedAgents[0]?.lapTimes?.length > 0 ? formatTime(Math.min(...sortedAgents[0].lapTimes)) : '-'}
             </span>
           </div>
           <div className="flex justify-between items-center py-3">

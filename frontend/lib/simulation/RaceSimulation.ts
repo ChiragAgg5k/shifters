@@ -141,6 +141,16 @@ export class RaceSimulation {
       // Move vehicle
       vehicle.move(this.timeStep, this.track.length)
       
+      // Apply weather-based tire cooling after movement
+      const ambientTemp = this.temperature
+      if (vehicle.tireTemperature > ambientTemp) {
+        let coolingRate = (vehicle.tireTemperature - ambientTemp) * 0.01 * this.timeStep
+        if (this.weather === 'rain') {
+          coolingRate *= 2.0 // Rain cools tires faster
+        }
+        vehicle.tireTemperature = Math.max(ambientTemp, vehicle.tireTemperature - coolingRate)
+      }
+      
       // Check lap completion
       if (vehicle.justCrossedLine) {
         const lapTime = this.simulationTime - vehicle.lapTimes.reduce((a, b) => a + b, 0)
