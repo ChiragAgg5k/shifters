@@ -33,17 +33,6 @@ export interface RaceConfig {
   perAgentConfig?: PerAgentConfig
 }
 
-// Load circuits from public folder
-async function loadCircuits() {
-  try {
-    const response = await fetch('/data/circuits/f1-circuits.json')
-    const data = await response.json()
-    return data.circuits
-  } catch (error) {
-    console.error('Failed to load circuits:', error)
-    return []
-  }
-}
 
 export function useRaceSimulation() {
   const [raceState, setRaceState] = useState<SimulationState | null>(null)
@@ -52,6 +41,7 @@ export function useRaceSimulation() {
   const simulationRef = useRef<RaceSimulation | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
+  const speedMultiplierRef = useRef<number>(1)
 
   /**
    * Stop the race
@@ -142,8 +132,7 @@ export function useRaceSimulation() {
 
     // Start animation loop
     lastUpdateRef.current = performance.now()
-    const speedMultiplier = config.speedMultiplier || 1
-    const timeStep = 100 / speedMultiplier // Adjust time step based on speed multiplier
+    speedMultiplierRef.current = config.speedMultiplier || 1
     
     // Run animation loop
     const loop = (currentTime: number) => {
@@ -152,6 +141,10 @@ export function useRaceSimulation() {
         setIsRunning(false)
         return
       }
+
+      // Use current speed multiplier (can change during race)
+      const speedMultiplier = speedMultiplierRef.current
+      const timeStep = 100 / speedMultiplier
 
       // Fixed time step with speed multiplier
       const elapsed = currentTime - lastUpdateRef.current
@@ -186,10 +179,90 @@ export function useRaceSimulation() {
     }
   }, [stopRace])
 
+  /**
+   * Update speed multiplier during race
+   */
+  const updateSpeedMultiplier = useCallback((multiplier: number) => {
+    speedMultiplierRef.current = multiplier
+  }, [])
+
+  /**
+   * Update track temperature during race
+   */
+  const updateTrackTemperature = useCallback((temp: number) => {
+    if (simulationRef.current) {
+      simulationRef.current.temperature = temp
+    }
+  }, [])
+
+  /**
+   * Update weather during race
+   */
+  const updateWeather = useCallback((weather: string) => {
+    if (simulationRef.current) {
+      simulationRef.current.weather = weather
+    }
+  }, [])
+
+  /**
+   * Update rain probability during race (determines weather)
+   */
+  const updateRainProbability = useCallback((probability: number) => {
+    if (simulationRef.current) {
+      // Determine weather based on probability
+      const weather = Math.random() < probability ? 'rain' : 'clear'
+      simulationRef.current.weather = weather
+    }
+  }, [])
+
+  /**
+   * Update vehicle max speed during race
+   */
+  const updateVehicleMaxSpeed = useCallback((vehicleIndex: number, maxSpeed: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].maxSpeed = maxSpeed
+    }
+  }, [])
+
+  /**
+   * Update vehicle acceleration during race
+   */
+  const updateVehicleAcceleration = useCallback((vehicleIndex: number, acceleration: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].acceleration = acceleration
+    }
+  }, [])
+
+  /**
+   * Update vehicle DNF probability during race
+   */
+  const updateVehicleDnfProbability = useCallback((vehicleIndex: number, dnfProbability: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].dnfProbability = dnfProbability
+    }
+  }, [])
+
+  /**
+   * Update vehicle cornering skill during race
+   */
+  const updateVehicleCorneringSkill = useCallback((vehicleIndex: number, corneringSkill: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].corneringSkill = corneringSkill
+    }
+  }, [])
+
   return {
     raceState,
     isRunning,
     startRace,
-    stopRace
+    stopRace,
+    updateSpeedMultiplier,
+    updateTrackTemperature,
+    updateWeather,
+    updateRainProbability,
+    updateVehicleMaxSpeed,
+    updateVehicleAcceleration,
+    updateVehicleDnfProbability,
+    updateVehicleCorneringSkill
   }
 }
