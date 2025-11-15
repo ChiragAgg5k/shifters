@@ -81,15 +81,15 @@ export function ControlDeck({
   useEffect(() => {
     const loadCircuits = async () => {
       try {
-        const response = await fetch('/data/circuits/f1-circuits.geojson')
+        const response = await fetch('/data/circuits/f1-2024-circuits.json')
         const data = await response.json()
-        // Extract circuits from GeoJSON FeatureCollection
-        if (data.features) {
-          const loadedCircuits = data.features.map((feature: any) => ({
-            id: feature.properties.id,
-            name: feature.properties.Name,
-            location: feature.properties.Location,
-            coordinates: feature.geometry.coordinates
+        // Extract circuits from JSON
+        if (data.circuits) {
+          const loadedCircuits = data.circuits.map((circuit: any) => ({
+            id: circuit.id,
+            name: circuit.name,
+            location: circuit.location,
+            coordinates: circuit.coordinates
           }))
           setCircuits(loadedCircuits)
         }
@@ -180,18 +180,22 @@ export function ControlDeck({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-muted-foreground">Circuit</label>
+          <label className="text-sm font-medium text-muted-foreground">Circuit ({circuits.length} tracks)</label>
           <select
             value={circuit}
             onChange={(e) => setCircuit(e.target.value)}
             disabled={raceActive}
             className="w-full px-3 py-2 bg-input border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           >
-            <option value="mc-1929">Circuit de Monaco</option>
-            <option value="gb-1948">Silverstone Circuit</option>
-            <option value="be-1925">Circuit de Spa-Francorchamps</option>
-            <option value="au-1953">Albert Park Circuit</option>
-            <option value="it-1922">Autodromo Nazionale Monza</option>
+            {circuits.length > 0 ? (
+              circuits.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} - {c.location}
+                </option>
+              ))
+            ) : (
+              <option value="mc-1929">Loading circuits...</option>
+            )}
           </select>
         </div>
       </div>

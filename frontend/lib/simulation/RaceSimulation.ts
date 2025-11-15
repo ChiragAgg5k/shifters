@@ -51,6 +51,9 @@ export class RaceSimulation {
   // DNFs
   dnfVehicles: Set<string> = new Set()
 
+  // Race report data
+  raceReportData: any = null
+
   constructor(config: SimulationConfig) {
     this.track = config.track
     this.timeStep = config.timeStep || 0.1
@@ -154,7 +157,20 @@ export class RaceSimulation {
       // Check lap completion
       if (vehicle.justCrossedLine) {
         const lapTime = this.simulationTime - vehicle.lapTimes.reduce((a, b) => a + b, 0)
-        vehicle.completeLap(lapTime)
+
+        // Calculate gaps for telemetry
+        const leader = this.vehicles.find(v => v.currentPosition === 1)
+        const gapToLeader = leader ? this.simulationTime - (leader.totalTime || 0) : 0
+
+        vehicle.completeLap(lapTime, gapToLeader, vehicle.gapToAhead)
+
+        // Check if pit stop is needed (after crossing line)
+        if (vehicle.shouldPitStop(vehicle.lap, this.track.numLaps)) {
+          const nextCompound = vehicle.getNextTireCompound()
+          const pitDuration = vehicle.pitStop(nextCompound)
+          vehicle.lapPitStop = true
+          vehicle.lapPitDuration = pitDuration
+        }
 
         // Check if finished race (after completing the lap)
         if (vehicle.lap >= this.track.numLaps) {
@@ -188,6 +204,7 @@ export class RaceSimulation {
     if (activeVehicles.length === 0 && this.vehicles.some(v => v.finished)) {
       this.running = false
       console.log(`🏆 Race finished! Total time: ${this.simulationTime.toFixed(2)}s`)
+      this.generateRaceReport()
     }
 
     // Debug: log first vehicle status every 10 steps
@@ -221,15 +238,30 @@ export class RaceSimulation {
         return progressB - progressA
       })
 
-    // Assign positions
+    // Assign positions and calculate gaps
     sortedVehicles.forEach((vehicle, index) => {
       const oldPosition = vehicle.currentPosition
       vehicle.currentPosition = index + 1
+
+      // Calculate gap to car ahead (in seconds)
+      if (index > 0) {
+        const carAhead = sortedVehicles[index - 1]
+        const distanceGap = (carAhead.lap * this.track.length + carAhead.position) -
+          (vehicle.lap * this.track.length + vehicle.position)
+
+        // Calculate average speed for time estimation (avoid division by zero)
+        const avgSpeed = (vehicle.speed + carAhead.speed) / 2
+        vehicle.gapToAhead = avgSpeed > 0.1 ? distanceGap / avgSpeed : 0
+      } else {
+        // Leader has no gap
+        vehicle.gapToAhead = 0
+      }
 
       // Track overtakes
       if (oldPosition > vehicle.currentPosition) {
         vehicle.overtakes++
         vehicle.positionsGained++
+        vehicle.lapOvertakes++ // Track for telemetry
       } else if (oldPosition < vehicle.currentPosition) {
         vehicle.overtakenThisLap = true
       }
@@ -241,6 +273,60 @@ export class RaceSimulation {
    */
   getFinishedCount(): number {
     return this.vehicles.filter(v => v.finished).length
+  }
+
+  /**
+   * Generate comprehensive race report with telemetry analysis
+   */
+  generateRaceReport(): void {
+    console.log('\n' + '='.repeat(80))
+    console.log('📊 RACE REPORT - ' + this.track.name.toUpperCase())
+    console.log('='.repeat(80))
+
+    const finishedVehicles = this.vehicles
+      .filter(v => v.finished)
+      .sort((a, b) => (a.finishTime || 0) - (b.finishTime || 0))
+
+    // Final Classification
+    console.log('\n🏁 FINAL CLASSIFICATION:')
+    finishedVehicles.forEach((v, i) => {
+      const totalTime = (v.finishTime || v.totalTime).toFixed(2)
+      const gap = i === 0 ? 'Winner' : `+${((v.finishTime || 0) - (finishedVehicles[0].finishTime || 0)).toFixed(2)}s`
+      console.log(`${(i + 1).toString().padStart(2)}. ${v.name.padEnd(15)} ${totalTime}s (${gap}) - ${v.pitStops} stops`)
+    })
+
+    // Fastest Lap
+    console.log('\n⚡ FASTEST LAPS:')
+    const fastestLaps = this.vehicles
+      .map(v => ({
+        name: v.name,
+        fastestLap: Math.min(...v.lapTimes.filter(t => t > 0)),
+        lapNumber: v.lapTimes.indexOf(Math.min(...v.lapTimes.filter(t => t > 0))) + 1
+      }))
+      .sort((a, b) => a.fastestLap - b.fastestLap)
+      .slice(0, 3)
+
+    fastestLaps.forEach((fl, i) => {
+      console.log(`${i + 1}. ${fl.name.padEnd(15)} ${fl.fastestLap.toFixed(2)}s (Lap ${fl.lapNumber})`)
+    })
+
+    // Store report data for UI
+    this.raceReportData = {
+      classification: finishedVehicles.map((v, i) => ({
+        position: i + 1,
+        name: v.name,
+        totalTime: v.finishTime || v.totalTime,
+        gap: i === 0 ? 0 : (v.finishTime || 0) - (finishedVehicles[0].finishTime || 0),
+        pitStops: v.pitStops,
+        telemetry: v.lapTelemetry
+      })),
+      fastestLaps: fastestLaps,
+      trackName: this.track.name,
+      totalLaps: this.track.numLaps,
+      raceTime: this.simulationTime
+    }
+
+    console.log('\n' + '='.repeat(80) + '\n')
   }
 
   /**
@@ -262,11 +348,10 @@ export class RaceSimulation {
         active: this.safetyCarActive,
         duration: this.safetyCarLapsRemaining
       },
-      dnfs: Array.from(this.dnfVehicles)
+      dnfs: Array.from(this.dnfVehicles),
+      raceReport: this.raceReportData
     }
-  }
-
-  /**
+  }  /**
    * Realtime update methods for simulation parameters
    */
   updateWeather(newWeather: string): void {

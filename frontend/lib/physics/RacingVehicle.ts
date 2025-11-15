@@ -3,6 +3,33 @@
  * Port of Python base_agent.py with full F1-metrics inspired physics
  */
 
+export interface LapTelemetry {
+  lapNumber: number
+  lapTime: number
+  tireWearStart: number
+  tireWearEnd: number
+  tireCompound: string
+  avgTireTemp: number
+  maxTireTemp: number
+  minTireTemp: number
+  energyStart: number
+  energyEnd: number
+  energyUsed: number
+  damageStart: number
+  damageEnd: number
+  avgSpeed: number
+  maxSpeed: number
+  topSpeed: number
+  overtakesMade: number
+  drsUsageTime: number
+  slipstreamTime: number
+  position: number
+  gapToLeader: number
+  gapToAhead: number
+  pitStopThisLap: boolean
+  pitStopDuration: number
+}
+
 export interface VehicleConfig {
   id: string
   name: string
@@ -21,6 +48,8 @@ export interface VehicleConfig {
   differentialPreload?: number  // 0-100 Nm, optimal ~50
   engineBraking?: number         // 0.0-1.0, where 0=min harvesting, 1=max braking
   brakeBalance?: number          // 0.0-1.0, front bias (optimal ~0.52-0.56)
+  // Tire compound
+  tireCompound?: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 }
 
 export interface VehicleState {
@@ -34,12 +63,16 @@ export interface VehicleState {
   energy: number
   tireWear: number
   tireTemperature: number
+  tireCompound: string
   drsActive: boolean
   inSlipstream: boolean
   damageLevel: number
   pitStops: number
   currentPosition: number
   justCrossedLine: boolean
+  gapToAhead: number // Time gap to car ahead in seconds
+  inPit: boolean // Currently in pit lane
+  nextPitLap: number // Planned lap for next pit stop
 }
 
 export class RacingVehicle {
@@ -97,11 +130,33 @@ export class RacingVehicle {
   finished: boolean = false
   totalTime: number = 0
   lapTimes: number[] = []
+  lapTelemetry: LapTelemetry[] = [] // Detailed telemetry per lap
+
+  // Current lap tracking for telemetry
+  lapStartTime: number = 0
+  lapEnergyStart: number = 100
+  lapTireWearStart: number = 0
+  lapDamageStart: number = 0
+  lapSpeedSum: number = 0
+  lapSpeedSamples: number = 0
+  lapMaxSpeed: number = 0
+  lapTireTempSum: number = 0
+  lapTireTempSamples: number = 0
+  lapTireTempMax: number = 0
+  lapTireTempMin: number = 999
+  lapOvertakes: number = 0
+  lapDrsTime: number = 0
+  lapSlipstreamTime: number = 0
+  lapPitStop: boolean = false
+  lapPitDuration: number = 0
 
   // Energy and tire management
   energy: number = 100
   tireWear: number = 0
-  tireTemperature: number = 85 // Start with warm tires
+  tireTemperature: number = 60 // Start with cool tires (realistic warm-up)
+  tireCompound: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet' = 'medium'
+  tireWearRate: number = 1.0 // Multiplier based on compound
+  tireGripLevel: number = 1.0 // Grip multiplier based on compound
 
   // Aerodynamics
   drsActive: boolean = false
@@ -125,6 +180,12 @@ export class RacingVehicle {
   overtakenThisLap: boolean = false
   overtakes: number = 0
   positionsGained: number = 0
+  gapToAhead: number = 0 // Time gap to car ahead in seconds
+
+  // Pit stop strategy
+  inPit: boolean = false
+  nextPitLap: number = -1 // -1 means not yet planned
+  pitStopStrategy: ('soft' | 'medium' | 'hard')[] = [] // Tire compound strategy
 
   // Track state
   currentCurvature: number = 0
@@ -164,6 +225,13 @@ export class RacingVehicle {
     this.gridPenalty = (this.qualifyingPosition - 1) * 0.25
 
     this.currentPosition = this.qualifyingPosition
+
+    // Set tire compound and initialize characteristics
+    this.tireCompound = config.tireCompound || 'medium'
+    this.setTireCompoundCharacteristics(this.tireCompound)
+
+    // Initialize pit stop strategy for races (will be updated by simulation)
+    this.planPitStopStrategy()
   }
 
   /**
@@ -195,8 +263,8 @@ export class RacingVehicle {
 
     // Base speed calculation
     if (curvature === 0) {
-      // Straight: full speed with traction factor
-      this.targetSpeed = this.maxSpeed * this.tractionFactor
+      // Straight: use max speed (traction factor affects acceleration, not top speed)
+      this.targetSpeed = this.maxSpeed
     } else {
       // Corner: physics-based max speed
       // v_max = sqrt((μ * N * r) / m)
@@ -236,6 +304,11 @@ export class RacingVehicle {
     // Energy limit
     if (this.energy < 10) {
       this.targetSpeed *= 0.8 // Reduced power mode
+    }
+
+    // Hard cap: never exceed maxSpeed on straights (corners use physics-based limit)
+    if (curvature === 0) {
+      this.targetSpeed = Math.min(this.targetSpeed, this.maxSpeed)
     }
   }
 
@@ -327,6 +400,10 @@ export class RacingVehicle {
       this.speed = Math.max(0, this.speed - totalDecel * timeStep)
     }
 
+    // CRITICAL: Enforce absolute speed limit (applies to both straights AND corners)
+    // maxSpeed is a hard limit set by the user/config and should never be exceeded
+    this.speed = Math.min(this.speed, this.maxSpeed)
+
     // Calculate movement
     const baseMovement = this.speed * timeStep
     const variationDistance = -lapTimeVariation * (this.speed / 10.0)
@@ -337,6 +414,19 @@ export class RacingVehicle {
 
     this.position += movement
     this.distanceTraveled += movement
+
+    // Collect telemetry samples during lap
+    this.lapSpeedSum += this.speed
+    this.lapSpeedSamples++
+    this.lapMaxSpeed = Math.max(this.lapMaxSpeed, this.speed)
+
+    this.lapTireTempSum += this.tireTemperature
+    this.lapTireTempSamples++
+    this.lapTireTempMax = Math.max(this.lapTireTempMax, this.tireTemperature)
+    this.lapTireTempMin = Math.min(this.lapTireTempMin, this.tireTemperature)
+
+    if (this.drsActive) this.lapDrsTime += timeStep
+    if (this.inSlipstream) this.lapSlipstreamTime += timeStep
 
     // Normalize position for circuit tracks
     this.justCrossedLine = false
@@ -353,37 +443,100 @@ export class RacingVehicle {
     const energyConsumption = (speedFactor * 0.01 + accelFactor * 0.005 + dragFactor * 0.002) * timeStep
     this.energy = Math.max(0, this.energy - energyConsumption)
 
-    // Tire wear (cornering, braking, high speed, and dirty air) - matches Python backend
+    // Tire wear (cornering, braking, high speed, and dirty air)
+    // Base wear rate: ~1% per lap on medium tires in normal conditions
+    let totalWear = 0
+
+    // Cornering wear (main source)
     if (this.currentCurvature > 0) {
-      let wearRate = (this.speed / this.maxSpeed) * 0.001 * timeStep
+      const corneringIntensity = (this.speed / this.maxSpeed) * Math.abs(this.currentCurvature * 100)
+      let wearRate = corneringIntensity * 0.15 * this.tireWearRate * timeStep
+
       // Dirty air increases tire wear by 10% (F1-metrics inspired)
       if (this.inSlipstream) {
         wearRate *= 1.1
       }
-      this.tireWear = Math.min(100.0, this.tireWear + wearRate)
+      totalWear += wearRate
     }
 
     // Hard braking increases tire wear
     if (this.speed > this.targetSpeed) {
       const brakingFactor = Math.abs(this.speed - this.targetSpeed) / this.maxSpeed
-      const brakeWear = brakingFactor * 0.0005 * timeStep
-      this.tireWear = Math.min(100.0, this.tireWear + brakeWear)
+      const brakeWear = brakingFactor * 0.08 * this.tireWearRate * timeStep
+      totalWear += brakeWear
     }
 
-    // Tire temperature management - matches Python backend
-    // Tires heat up with use (any speed > 0)
+    // Straight-line wear (minimal but constant)
     if (this.speed > 0) {
-      let heatRate = (this.speed / this.maxSpeed) * 2.0 * timeStep
-      if (this.currentCurvature > 0) {
-        heatRate *= 1.5 // Cornering generates more heat
-      }
-      this.tireTemperature = Math.min(120.0, this.tireTemperature + heatRate)
+      const straightWear = (this.speed / this.maxSpeed) * 0.02 * this.tireWearRate * timeStep
+      totalWear += straightWear
     }
 
-    // Tires cool down naturally (will be enhanced by weather in RaceSimulation)
+    // Temperature-based wear (overheating degrades tires faster)
+    if (this.tireTemperature > 100) {
+      const tempWearMultiplier = 1.0 + ((this.tireTemperature - 100) / 100)
+      totalWear *= tempWearMultiplier
+    }
+
+    this.tireWear = Math.min(100.0, this.tireWear + totalWear)
+
+    // Advanced tire temperature modeling
+    // Base heating depends on current tire temperature (harder to heat when already hot)
+    const tempDiff = 110 - this.tireTemperature // Optimal operating temp ~90-100°C
+    const tempFactor = Math.max(0.3, Math.min(1.0, tempDiff / 50)) // Diminishing returns
+
+    // Heating from speed (energy dissipation through tire flex)
+    let heatRate = 0
+    if (this.speed > 0) {
+      const speedRatio = this.speed / this.maxSpeed
+      // Base heating: ~0.8°C/s at full speed when cold, reduces as temp increases
+      heatRate = speedRatio * 0.8 * tempFactor * timeStep
+
+      // Cornering generates significant heat through lateral forces
+      if (this.currentCurvature > 0) {
+        const corneringIntensity = Math.min(1.0, this.currentCurvature * 100)
+        const lateralHeat = corneringIntensity * 1.2 * timeStep // Up to +1.2°C/s in hard corners
+        heatRate += lateralHeat
+      }
+
+      // Braking generates heat through tire-ground friction
+      if (this.speed > 10 && this.currentCurvature > 0.005) {
+        const brakingHeat = 0.4 * timeStep // +0.4°C/s during braking
+        heatRate += brakingHeat
+      }
+
+      // Aggressive driving (high cornering skill = more heat)
+      const aggressionMultiplier = 0.8 + (this.corneringSkill * 0.4) // 0.8-1.2x
+      heatRate *= aggressionMultiplier
+
+      // Tire compound affects heat generation
+      const compoundHeatMultiplier = {
+        'soft': 1.2,      // Softs run hotter
+        'medium': 1.0,    // Baseline
+        'hard': 0.85,     // Hards stay cooler
+        'intermediate': 0.9,
+        'wet': 0.8        // Wets need less heat
+      }[this.tireCompound]
+      heatRate *= compoundHeatMultiplier
+
+      // Apply heating with cap at 125°C (overheating threshold)
+      this.tireTemperature = Math.min(125.0, this.tireTemperature + heatRate)
+    }
+
+    // Natural cooling - enhanced model
     const ambientTemp = 25
-    const coolingRate = (this.tireTemperature - ambientTemp) * 0.01 * timeStep
+    // Cooling rate depends on temperature difference (Newton's law of cooling)
+    // Higher speeds = more airflow = faster cooling
+    const airflowFactor = 1.0 + (this.speed / this.maxSpeed) * 0.5 // 1.0-1.5x
+    const baseCoolingRate = (this.tireTemperature - ambientTemp) * 0.008 * timeStep
+    const coolingRate = baseCoolingRate * airflowFactor
     this.tireTemperature = Math.max(ambientTemp, this.tireTemperature - coolingRate)
+
+    // Add small random variation to prevent all drivers having identical temps
+    if (Math.random() < 0.1) { // 10% chance per frame
+      const variation = (Math.random() - 0.5) * 0.5 // ±0.25°C random fluctuation
+      this.tireTemperature = Math.max(ambientTemp, Math.min(125, this.tireTemperature + variation))
+    }
 
     // Reduced performance with tire wear - matches Python backend
     if (this.tireWear > 50) {
@@ -409,6 +562,50 @@ export class RacingVehicle {
     if (this.currentCurvature === 0) {
       this.drsActive = true
     }
+  }
+
+  /**
+   * Set tire compound characteristics
+   * Compounds: Soft (fast, high wear), Medium (balanced), Hard (durable, slower)
+   *           Intermediate (light rain), Wet (heavy rain)
+   */
+  private setTireCompoundCharacteristics(compound: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'): void {
+    switch (compound) {
+      case 'soft':
+        this.tireWearRate = 1.8  // Wears 80% faster
+        this.tireGripLevel = 1.15 // 15% more grip
+        this.mu = 1.8 * 1.15      // Enhanced base friction
+        break
+      case 'medium':
+        this.tireWearRate = 1.0  // Baseline
+        this.tireGripLevel = 1.0  // Baseline grip
+        this.mu = 1.8
+        break
+      case 'hard':
+        this.tireWearRate = 0.6  // Wears 40% slower
+        this.tireGripLevel = 0.92 // 8% less grip
+        this.mu = 1.8 * 0.92
+        break
+      case 'intermediate':
+        this.tireWearRate = 0.9  // Slightly better than medium
+        this.tireGripLevel = 0.85 // Less grip on dry
+        this.mu = 1.8 * 0.85
+        break
+      case 'wet':
+        this.tireWearRate = 0.7  // Very durable
+        this.tireGripLevel = 0.7  // Poor on dry, excellent in rain
+        this.mu = 1.8 * 0.7
+        break
+    }
+  }
+
+  /**
+   * Change tire compound during pit stop
+   */
+  changeTireCompound(newCompound: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'): void {
+    this.tireCompound = newCompound
+    this.setTireCompoundCharacteristics(newCompound)
+    console.log(`[${this.name}] Tire compound changed to ${newCompound}`)
   }
 
   /**
@@ -440,9 +637,64 @@ export class RacingVehicle {
   }
 
   /**
+   * Plan pit stop strategy based on tire compounds
+   */
+  planPitStopStrategy(): void {
+    // Default 1-stop strategy: Start medium, switch to hard
+    // For longer races (>30 laps), plan 2 stops
+    this.pitStopStrategy = ['medium', 'hard']
+    this.nextPitLap = -1 // Will be calculated during race
+  }
+
+  /**
+   * Check if pit stop is needed
+   */
+  shouldPitStop(currentLap: number, totalLaps: number): boolean {
+    // Don't pit on first lap or last 2 laps
+    if (currentLap <= 1 || currentLap >= totalLaps - 1) return false
+
+    // Pit if tire wear is critical (>85%)
+    if (this.tireWear > 85) return true
+
+    // Pit if damage is significant (>60%)
+    if (this.damageLevel > 60) return true
+
+    // Strategic pit stop based on race progress
+    if (this.nextPitLap === -1 && this.pitStops === 0) {
+      // Plan first pit stop around 40-60% race distance
+      const optimalLap = Math.floor(totalLaps * (0.4 + Math.random() * 0.2))
+      this.nextPitLap = optimalLap
+    }
+
+    // Pit if at planned lap and tire wear > 50%
+    if (currentLap >= this.nextPitLap && this.tireWear > 50) return true
+
+    return false
+  }
+
+  /**
+   * Choose next tire compound based on strategy
+   */
+  getNextTireCompound(): 'soft' | 'medium' | 'hard' {
+    const stopIndex = this.pitStops
+
+    // If we have a strategy, follow it
+    if (stopIndex < this.pitStopStrategy.length) {
+      return this.pitStopStrategy[stopIndex]
+    }
+
+    // Fallback: alternate between compounds
+    if (this.tireCompound === 'soft') return 'medium'
+    if (this.tireCompound === 'medium') return 'hard'
+    return 'medium'
+  }
+
+  /**
    * Perform pit stop
    */
-  pitStop(): number {
+  pitStop(newCompound?: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'): number {
+    this.inPit = true
+
     // Log-logistic distribution for pit stop time
     // Base time: 2.5s, with variability
     const alpha = 2.5
@@ -453,9 +705,15 @@ export class RacingVehicle {
     // Clamp to reasonable range (2.0s - 4.0s)
     const actualPitDuration = Math.max(2.0, Math.min(4.0, pitDuration))
 
-    // Reset tire state
+    // Reset tire state with fresh tires
     this.tireWear = 0.0
     this.tireTemperature = 60.0 // Fresh cold tires
+
+    // Change compound if specified
+    if (newCompound) {
+      this.changeTireCompound(newCompound)
+    }
+
     this.corneringSkill = Math.max(this.corneringSkill, 1.0)
 
     // Partial damage repair
@@ -464,6 +722,16 @@ export class RacingVehicle {
     this.pitStops++
     this.speed = 0.0
     this.totalTime += actualPitDuration
+
+    // Reset next pit lap (will be recalculated)
+    this.nextPitLap = -1
+
+    // Exit pit lane after pit work
+    setTimeout(() => {
+      this.inPit = false
+    }, actualPitDuration * 1000)
+
+    console.log(`🔧 ${this.name} pitted on lap ${this.lap} (${actualPitDuration.toFixed(2)}s) - New tires: ${this.tireCompound.toUpperCase()}`)
 
     return actualPitDuration
   }
@@ -669,10 +937,12 @@ export class RacingVehicle {
    */
   updateMaxSpeed(newMaxSpeed: number): void {
     this.maxSpeed = newMaxSpeed
+    console.log(`[${this.name}] Max speed updated to ${newMaxSpeed} m/s`)
   }
 
   updateAcceleration(newAcceleration: number): void {
     this.acceleration = newAcceleration
+    console.log(`[${this.name}] Acceleration updated to ${newAcceleration} m/s²`)
   }
 
   updateBrakingRate(newBrakingRate: number): void {
@@ -702,9 +972,57 @@ export class RacingVehicle {
   /**
    * Complete a lap
    */
-  completeLap(lapTime: number): void {
+  completeLap(lapTime: number, gapToLeader: number = 0, gapToAhead: number = 0): void {
     this.lap++
     this.lapTimes.push(lapTime)
+
+    // Save detailed telemetry for this lap
+    const telemetry: LapTelemetry = {
+      lapNumber: this.lap,
+      lapTime: lapTime,
+      tireWearStart: this.lapTireWearStart,
+      tireWearEnd: this.tireWear,
+      tireCompound: this.tireCompound,
+      avgTireTemp: this.lapTireTempSamples > 0 ? this.lapTireTempSum / this.lapTireTempSamples : this.tireTemperature,
+      maxTireTemp: this.lapTireTempMax,
+      minTireTemp: this.lapTireTempMin < 999 ? this.lapTireTempMin : this.tireTemperature,
+      energyStart: this.lapEnergyStart,
+      energyEnd: this.energy,
+      energyUsed: this.lapEnergyStart - this.energy,
+      damageStart: this.lapDamageStart,
+      damageEnd: this.damageLevel,
+      avgSpeed: this.lapSpeedSamples > 0 ? this.lapSpeedSum / this.lapSpeedSamples : this.speed,
+      maxSpeed: this.lapMaxSpeed,
+      topSpeed: this.lapMaxSpeed * 3.6, // Convert to km/h
+      overtakesMade: this.lapOvertakes,
+      drsUsageTime: this.lapDrsTime,
+      slipstreamTime: this.lapSlipstreamTime,
+      position: this.currentPosition,
+      gapToLeader: gapToLeader,
+      gapToAhead: gapToAhead,
+      pitStopThisLap: this.lapPitStop,
+      pitStopDuration: this.lapPitDuration
+    }
+
+    this.lapTelemetry.push(telemetry)
+
+    // Reset lap tracking for next lap
+    this.lapStartTime = this.totalTime
+    this.lapEnergyStart = this.energy
+    this.lapTireWearStart = this.tireWear
+    this.lapDamageStart = this.damageLevel
+    this.lapSpeedSum = 0
+    this.lapSpeedSamples = 0
+    this.lapMaxSpeed = 0
+    this.lapTireTempSum = 0
+    this.lapTireTempSamples = 0
+    this.lapTireTempMax = 0
+    this.lapTireTempMin = 999
+    this.lapOvertakes = 0
+    this.lapDrsTime = 0
+    this.lapSlipstreamTime = 0
+    this.lapPitStop = false
+    this.lapPitDuration = 0
   }
 
   /**
@@ -744,12 +1062,16 @@ export class RacingVehicle {
       energy: Math.round(this.energy * 100) / 100,
       tireWear: Math.round(this.tireWear * 100) / 100,
       tireTemperature: Math.round(this.tireTemperature * 10) / 10,
+      tireCompound: this.tireCompound,
       drsActive: this.drsActive,
       inSlipstream: this.inSlipstream,
       damageLevel: Math.round(this.damageLevel * 10) / 10,
       pitStops: this.pitStops,
       currentPosition: this.currentPosition,
-      justCrossedLine: this.justCrossedLine
+      justCrossedLine: this.justCrossedLine,
+      gapToAhead: Math.round(this.gapToAhead * 100) / 100, // Round to 2 decimal places
+      inPit: this.inPit,
+      nextPitLap: this.nextPitLap
     }
   }
 }

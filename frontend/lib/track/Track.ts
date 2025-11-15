@@ -154,11 +154,11 @@ export class Track {
     for (const coord of coordinates) {
       const lon = coord[0]
       const lat = coord[1]
-      
+
       // Simple equirectangular projection
       const x = (lon - minLon) * 111320 * Math.cos(lat * Math.PI / 180)
       const y = (lat - minLat) * 110540
-      
+
       points.push({ x, y, z: 0 })
     }
 
@@ -181,30 +181,46 @@ export class Track {
     for (let i = 0; i < points.length - 1; i++) {
       const start = points[i]
       const end = points[i + 1]
-      
+
       const dx = end.x - start.x
       const dy = end.y - start.y
       const length = Math.sqrt(dx * dx + dy * dy)
 
-      // Calculate curvature (simplified)
+      // Calculate curvature using Menger curvature (1/R formula using three points)
       let curvature = 0
-      if (i > 0 && i < points.length - 2) {
-        const prev = points[i - 1]
-        const next = points[i + 2]
-        
-        const angle1 = Math.atan2(start.y - prev.y, start.x - prev.x)
-        const angle2 = Math.atan2(next.y - end.y, next.x - end.x)
-        
-        let angleDiff = Math.abs(angle2 - angle1)
-        if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff
-        
-        curvature = angleDiff / length
+      if (i > 0 && i < points.length - 1) {
+        const p1 = points[i - 1]
+        const p2 = points[i]
+        const p3 = points[i + 1]
+
+        // Menger curvature: k = 4 * Area(triangle) / (a * b * c)
+        // where a, b, c are the side lengths of the triangle
+
+        // Calculate side lengths
+        const a = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+        const b = Math.sqrt((p3.x - p2.x) ** 2 + (p3.y - p2.y) ** 2)
+        const c = Math.sqrt((p3.x - p1.x) ** 2 + (p3.y - p1.y) ** 2)
+
+        // Calculate area using cross product
+        const area = Math.abs(
+          (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
+        ) / 2
+
+        // Avoid division by zero
+        if (a > 0 && b > 0 && c > 0) {
+          curvature = (4 * area) / (a * b * c)
+        }
       }
 
-      // Determine segment type
+      // Determine segment type based on Menger curvature
+      // Menger curvature k = 1/R where R is the radius of curvature
+      // For track segments:
+      //   - Straight: R > 1000m → k < 0.001
+      //   - Corner: 50m < R < 1000m → 0.001 < k < 0.02
+      //   - Chicane: R < 50m → k > 0.02
       let segmentType: 'straight' | 'corner' | 'chicane' = 'straight'
-      if (curvature > 0.01) {
-        segmentType = curvature > 0.05 ? 'chicane' : 'corner'
+      if (curvature > 0.001) {
+        segmentType = curvature > 0.02 ? 'chicane' : 'corner'
       }
 
       track.segments.push({
@@ -223,12 +239,37 @@ export class Track {
     const loopDy = loopEnd.y - loopStart.y
     const loopLength = Math.sqrt(loopDx * loopDx + loopDy * loopDy)
 
+    // Calculate curvature for closing segment
+    let loopCurvature = 0
+    if (points.length > 2) {
+      const p1 = points[points.length - 2]
+      const p2 = loopStart
+      const p3 = loopEnd
+
+      const a = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+      const b = Math.sqrt((p3.x - p2.x) ** 2 + (p3.y - p2.y) ** 2)
+      const c = Math.sqrt((p3.x - p1.x) ** 2 + (p3.y - p1.y) ** 2)
+
+      const area = Math.abs(
+        (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
+      ) / 2
+
+      if (a > 0 && b > 0 && c > 0) {
+        loopCurvature = (4 * area) / (a * b * c)
+      }
+    }
+
+    let loopSegmentType: 'straight' | 'corner' | 'chicane' = 'straight'
+    if (loopCurvature > 0.001) {
+      loopSegmentType = loopCurvature > 0.02 ? 'chicane' : 'corner'
+    }
+
     track.segments.push({
       startPoint: loopStart,
       endPoint: loopEnd,
       length: loopLength,
-      curvature: 0,
-      segmentType: 'straight'
+      curvature: loopCurvature,
+      segmentType: loopSegmentType
     })
 
     return track

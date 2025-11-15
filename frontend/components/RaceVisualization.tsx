@@ -92,7 +92,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     agents.forEach((agent, index) => {
       // Skip this agent if it just crossed the finish line
       if (agent.just_crossed_line) return
-      
+
       const progress = agent.position / trackLength
       const angle = startAngle + progress * 2 * Math.PI
       const x = centerX + radius * Math.cos(angle)
@@ -191,7 +191,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     agents.forEach((agent, index) => {
       // Skip this agent if it just crossed the finish line
       if (agent.just_crossed_line) return
-      
+
       const progress = agent.position / track.length
       const distances = [0]
       for (let i = 1; i < coords.length; i++) {
@@ -235,6 +235,24 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
   ) => {
     const color = AGENT_COLORS[index % AGENT_COLORS.length]
 
+    // Show repair emoji when in pit
+    if (agent.inPit) {
+      ctx.font = '24px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('🔧', x, y)
+
+      // Add pulsing effect
+      ctx.strokeStyle = '#f97316' // Orange
+      ctx.lineWidth = 3
+      ctx.globalAlpha = 0.6
+      ctx.beginPath()
+      ctx.arc(x, y, 20, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+      return
+    }
+
     // Agent circle
     ctx.fillStyle = agent.finished ? '#4ade80' : color
     ctx.beginPath()
@@ -250,6 +268,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     ctx.fillStyle = '#ffffff'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
     ctx.fillText(agent.name.split('#')[1] || (index + 1).toString(), x, y + 4)
 
     // Speed indicator

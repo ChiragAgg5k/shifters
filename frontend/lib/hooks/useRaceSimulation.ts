@@ -232,6 +232,7 @@ export function useRaceSimulation() {
   const updateVehicleMaxSpeed = useCallback((vehicleIndex: number, maxSpeed: number) => {
     if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
       simulationRef.current.vehicles[vehicleIndex].maxSpeed = maxSpeed
+      console.log(`[Hook] Updated vehicle ${vehicleIndex} maxSpeed to ${maxSpeed}`)
     }
   }, [])
 
@@ -241,6 +242,7 @@ export function useRaceSimulation() {
   const updateVehicleAcceleration = useCallback((vehicleIndex: number, acceleration: number) => {
     if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
       simulationRef.current.vehicles[vehicleIndex].acceleration = acceleration
+      console.log(`[Hook] Updated vehicle ${vehicleIndex} acceleration to ${acceleration}`)
     }
   }, [])
 

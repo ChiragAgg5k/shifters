@@ -8,7 +8,7 @@ export function DataGrid({ raceState }: DataGridProps) {
   // Use agents data which has all racing telemetry, sorted by position
   const agents = raceState?.agents || []
   const track = raceState?.environment?.track
-  
+
   // Calculate progress for each agent
   const agentsWithProgress = agents.map((agent: any) => {
     const trackLength = track?.length || 1
@@ -17,7 +17,7 @@ export function DataGrid({ raceState }: DataGridProps) {
     const progress = (currentDistance / totalDistance) * 100
     return { ...agent, progress }
   })
-  
+
   const sortedAgents = [...agentsWithProgress].sort((a, b) => {
     // Sort by: finished first, then by lap (desc), then by position (desc)
     if (a.finished !== b.finished) return a.finished ? 1 : -1
@@ -53,10 +53,11 @@ export function DataGrid({ raceState }: DataGridProps) {
         </div>
         <div className="space-y-2">
           <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-            <div className="col-span-1">Rank</div>
-            <div className="col-span-6">Agent</div>
+            <div className="col-span-1">Pos</div>
+            <div className="col-span-5">Agent</div>
             <div className="col-span-2">Lap</div>
-            <div className="col-span-3">Progress</div>
+            <div className="col-span-2">Gap</div>
+            <div className="col-span-2">Progress</div>
           </div>
           {sortedAgents.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">No race data yet</div>
@@ -74,6 +75,11 @@ export function DataGrid({ raceState }: DataGridProps) {
                     <div className="flex-1">
                       <div className="font-medium text-foreground flex items-center gap-2">
                         {agent.name}
+                        {agent.inPit && (
+                          <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-bold animate-pulse">
+                            PIT
+                          </span>
+                        )}
                         {agent.drsActive && (
                           <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
                             DRS
@@ -92,12 +98,26 @@ export function DataGrid({ raceState }: DataGridProps) {
                         <span className="text-muted-foreground">
                           🔋 {agent.energy?.toFixed(0) || 0}%
                         </span>
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground flex items-center gap-1">
                           🛞 {(100 - (agent.tireWear || 0)).toFixed(0)}%
+                          <span className={`px-1 py-0.5 rounded text-xs font-semibold ${agent.tireCompound === 'soft' ? 'bg-red-500/20 text-red-400' :
+                              agent.tireCompound === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                agent.tireCompound === 'hard' ? 'bg-white/20 text-white' :
+                                  agent.tireCompound === 'intermediate' ? 'bg-green-500/20 text-green-400' :
+                                    agent.tireCompound === 'wet' ? 'bg-blue-500/20 text-blue-400' :
+                                      'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                            {(agent.tireCompound || 'medium').charAt(0).toUpperCase()}
+                          </span>
                         </span>
                         <span className="text-muted-foreground">
                           🌡️ {agent.tireTemperature?.toFixed(0) || 0}°C
                         </span>
+                        {(agent.pitStops || 0) > 0 && (
+                          <span className="text-blue-400">
+                            🔧 {agent.pitStops}
+                          </span>
+                        )}
                         {(agent.damageLevel || 0) > 0 && (
                           <span className="text-red-400">
                             💥 {agent.damageLevel?.toFixed(0)}%
@@ -106,9 +126,15 @@ export function DataGrid({ raceState }: DataGridProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <div className="text-sm font-medium text-foreground">
-                      {formatTime(agent.total_time || agent.time)}
+                      {index === 0 ? (
+                        <span className="text-green-400">Leader</span>
+                      ) : (
+                        <span className={agent.gapToAhead > 1.0 ? 'text-orange-400' : 'text-yellow-400'}>
+                          +{agent.gapToAhead?.toFixed(2) || '0.00'}s
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {agent.progress?.toFixed(1) || '0.0'}%
