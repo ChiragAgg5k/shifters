@@ -7,6 +7,12 @@ import uuid
 if TYPE_CHECKING:
     from shifters.environment.track import Point3D
 
+try:
+    from shifters.racing import TireSet, TireCompound, PitStopStrategy
+    RACING_FEATURES_AVAILABLE = True
+except ImportError:
+    RACING_FEATURES_AVAILABLE = False
+
 
 class MobilityAgent(Agent):
     """
@@ -166,7 +172,7 @@ class MobilityAgent(Agent):
 
 
 class RacingVehicle(MobilityAgent):
-    """Specialized agent for racing scenarios (Formula E, F1, MotoGP, etc.)."""
+    """Specialized agent for racing scenarios with advanced tire and pit stop management."""
 
     def __init__(
         self,
@@ -177,10 +183,13 @@ class RacingVehicle(MobilityAgent):
         acceleration: float = 15.0,
         braking_rate: float = 25.0,
         cornering_skill: float = 1.0,
+        starting_compound: Optional["TireCompound"] = None,
+        enable_tire_management: bool = True,
+        pit_stops_planned: int = 1,
         **kwargs,
     ):
         """
-        Initialize racing vehicle.
+        Initialize racing vehicle with tire and pit stop management.
 
         Args:
             model: Simulation model
@@ -190,52 +199,300 @@ class RacingVehicle(MobilityAgent):
             acceleration: Acceleration in m/s²
             braking_rate: Braking power in m/s²
             cornering_skill: Skill factor for corners (0.5-1.5, 1.0 = normal)
+            starting_compound: Starting tire compound (defaults to MEDIUM)
+            enable_tire_management: Enable advanced tire degradation system
+            pit_stops_planned: Number of planned pit stops for strategy
             **kwargs: Additional properties
         """
         super().__init__(
             model, unique_id, name, max_speed, acceleration, braking_rate, **kwargs
         )
-        self.energy = 100.0  # Battery/fuel level
+        self.energy = 100.0  # Battery/fuel level (percentage)
         self.pit_stops = 0
         self.cornering_skill = cornering_skill
-        self.tire_wear = 0.0  # Tire degradation
+        
+        # F1Metrics-inspired fuel modeling
+        self.fuel_mass = 110.0  # kg - full tank for race start
+        self.fuel_consumption_rate = 1.8  # kg per lap (typical F1 consumption)
+        self.fuel_effect_per_lap = 0.037  # seconds per lap of fuel (F1Metrics)
+        
+        # Driver consistency for lap-time variability (F1Metrics)
+        # Range: 0.0 (very inconsistent) to 1.0 (perfectly consistent)
+        self.consistency = kwargs.get("consistency", 0.8)
+        
+        # Legacy tire wear for backwards compatibility
+        self.tire_wear = 0.0
+
+        # Advanced tire management
+        self.enable_tire_management = enable_tire_management and RACING_FEATURES_AVAILABLE
+        
+        if self.enable_tire_management:
+            if starting_compound is None:
+                from shifters.racing import TireCompound
+                starting_compound = TireCompound.MEDIUM
+            
+            self.current_tires = TireSet(starting_compound)
+            self.tire_history = []
+            
+            # Initialize pit stop strategy
+            if hasattr(model, "environment") and model.environment.track:
+                track = model.environment.track
+                # Get circuit name for OpenF1 data
+                circuit_name = kwargs.get("track_name")
+                if not circuit_name and hasattr(track, "name"):
+                    circuit_name = track.name
+                
+                self.pit_strategy = PitStopStrategy(
+                    total_laps=track.num_laps,
+                    track_length=track.length,
+                    pit_lane_time_loss=20.0,
+                    circuit_name=circuit_name,
+                )
+                # Use agent ID hash to vary pit strategies between cars
+                import hashlib
+                agent_seed = int(hashlib.md5(unique_id.encode()).hexdigest()[:8], 16) % 1000
+                self.pit_strategy.plan_strategy(starting_compound, pit_stops_planned, seed_offset=agent_seed)
+            else:
+                self.pit_strategy = None
+            
+            # Initialize DRS and overtaking systems
+            from shifters.racing import get_track_characteristics, DRSSystem, OvertakingModel
+            
+            # Try to get track name from environment
+            track_name = kwargs.get("track_name", "default")
+            if hasattr(model, "environment") and hasattr(model.environment, "track"):
+                track_name = getattr(model.environment.track, "name", track_name)
+            
+            self.track_characteristics = get_track_characteristics(track_name)
+            self.drs_system = DRSSystem(self.track_characteristics)
+            self.overtaking_model = OvertakingModel(self.track_characteristics)
+            self.drs_active = False
+        else:
+            self.current_tires = None
+            self.tire_history = []
+            self.pit_strategy = None
+            self.drs_system = None
+            self.overtaking_model = None
+            self.drs_active = False
+            self.pit_strategy = None
 
     def _calculate_target_speed(self):
-        """Calculate target speed with cornering skill adjustment."""
+        """Calculate target speed with tire performance and cornering skill."""
         super()._calculate_target_speed()
+        
+        # Apply tire performance multiplier
+        if self.enable_tire_management and self.current_tires:
+            is_wet = getattr(self.model.environment, "is_wet", False) if hasattr(self.model, "environment") else False
+            tire_performance = self.current_tires.get_performance_multiplier(is_wet)
+            self.target_speed *= tire_performance
+        
         # Skilled drivers can take corners faster
         if self.current_curvature > 0:
             self.target_speed *= self.cornering_skill
 
     def _move(self):
-        """Move and consume energy, apply tire wear."""
+        """Move with tire degradation and pit stop management."""
+        # Handle pit stop if in pit lane
+        if self.pit_strategy and self.pit_strategy.in_pit_lane:
+            time_step = getattr(self.model, "time_step", 0.1)
+            stop_complete, new_tires = self.pit_strategy.update_pit_stop(time_step)
+            
+            if stop_complete and new_tires:
+                # Install new tires
+                if self.current_tires:
+                    self.tire_history.append({
+                        "compound": self.current_tires.compound.value,
+                        "laps_used": self.current_tires.laps_used,
+                        "final_wear": self.current_tires.wear_percentage,
+                    })
+                self.current_tires = new_tires
+                
+                # Refuel/recharge
+                self.energy = 100.0
+                self.fuel_mass = 110.0
+                self.tire_wear = 0.0
+                self.pit_stops += 1
+                
+                # Reduced speed after pit exit
+                self.speed = self.max_speed * 0.3
+            else:
+                # Slow movement through pit lane while stop in progress
+                self.speed = self.max_speed * 0.3
+                self.position += self.speed * time_step
+            return
+        
+        # Normal movement
+        old_position = self.position
         super()._move()
-
-        # Energy consumption based on speed and acceleration
+        distance_this_step = self.position - old_position
+        
+        # Energy consumption
         time_step = getattr(self.model, "time_step", 0.1)
         speed_factor = self.speed / self.max_speed
         accel_factor = abs(self.speed - self.target_speed) / self.max_speed
-
         energy_consumption = (speed_factor * 0.01 + accel_factor * 0.005) * time_step
         self.energy = max(0, self.energy - energy_consumption)
+        
+        # Fuel consumption (F1Metrics model)
+        if hasattr(self.model.environment, "track"):
+            track = self.model.environment.track
+            lap_fraction = distance_this_step / track.length
+            self.consume_fuel(lap_fraction)
 
-        # Tire wear increases with cornering
-        if self.current_curvature > 0:
-            wear_rate = (self.speed / self.max_speed) * 0.001 * time_step
-            self.tire_wear = min(100.0, self.tire_wear + wear_rate)
+        # Tire degradation
+        if self.enable_tire_management and self.current_tires:
+            track = self.model.environment.track if hasattr(self.model, "environment") else None
+            if track:
+                is_wet = getattr(self.model.environment, "is_wet", False)
+                ambient_temp = getattr(self.model.environment, "temperature", 25.0)
+                
+                self.current_tires.update(
+                    lap_distance=distance_this_step,
+                    track_length=track.length,
+                    speed=self.speed,
+                    ambient_temp=ambient_temp,
+                    is_wet=is_wet,
+                )
+                
+                # Update legacy tire wear for compatibility
+                self.tire_wear = self.current_tires.wear_percentage
+        else:
+            # Legacy tire wear
+            if self.current_curvature > 0:
+                wear_rate = (self.speed / self.max_speed) * 0.001 * time_step
+                self.tire_wear = min(100.0, self.tire_wear + wear_rate)
 
-        # Reduced performance with tire wear
-        if self.tire_wear > 50:
-            wear_penalty = (self.tire_wear - 50) / 50  # 0 to 1
-            self.cornering_skill = max(0.7, 1.0 - wear_penalty * 0.3)
+        # Check if pit stop is needed
+        if self.pit_strategy and not self.finished:
+            should_pit = self.pit_strategy.should_pit(
+                self.lap + 1,  # Next lap
+                self.current_tires if self.current_tires else None,
+                is_damaged=False,
+            )
+            
+            if should_pit and not self.pit_strategy.in_pit_lane:
+                self.pit_strategy.execute_pit_entry(self.lap + 1, self.current_tires)
 
     def pit_stop(self):
-        """Perform pit stop to recharge/refuel and change tires."""
+        """Legacy pit stop method for backwards compatibility."""
         self.energy = 100.0
         self.tire_wear = 0.0
         self.cornering_skill = max(self.cornering_skill, 1.0)
         self.pit_stops += 1
-        self.speed = 0.0  # Stop during pit
+        self.speed = 0.0
+
+        if self.enable_tire_management and self.current_tires:
+            from shifters.racing import TireCompound
+            # Default to medium compound
+            self.current_tires = TireSet(TireCompound.MEDIUM)
+
+    def calculate_fuel_effect(self) -> float:
+        """
+        Calculate lap time penalty from fuel weight (F1Metrics model).
+        
+        Returns:
+            Time penalty in seconds based on remaining fuel
+        """
+        # F1Metrics: 0.037 seconds per lap of fuel weight
+        laps_of_fuel_remaining = self.fuel_mass / max(self.fuel_consumption_rate, 0.1)
+        return self.fuel_effect_per_lap * laps_of_fuel_remaining
+
+    def consume_fuel(self, laps: float = 1.0) -> None:
+        """
+        Consume fuel for completed laps.
+        
+        Args:
+            laps: Number of laps completed (can be fractional)
+        """
+        fuel_used = self.fuel_consumption_rate * laps
+        self.fuel_mass = max(0.0, self.fuel_mass - fuel_used)
+        
+        # Update energy percentage
+        initial_fuel = 110.0  # Full tank
+        self.energy = (self.fuel_mass / initial_fuel) * 100.0
+
+    def get_lap_time_variation(self) -> float:
+        """
+        Calculate lap-to-lap random variation based on driver consistency.
+        
+        Returns:
+            Time variation in seconds (can be positive or negative)
+        """
+        import random
+        
+        # F1Metrics model: σ ranges from 0.2s (consistent) to 0.7s (inconsistent)
+        # consistency = 1.0 → σ = 0.2s (very consistent driver)
+        # consistency = 0.0 → σ = 0.7s (very inconsistent driver)
+        std_dev = 0.7 - (self.consistency * 0.5)
+        
+        return random.normalvariate(0, std_dev)
+
+    def check_drs_eligibility(self, gap_to_car_ahead: float) -> None:
+        """
+        Check and update DRS status based on gap to car ahead.
+        
+        Args:
+            gap_to_car_ahead: Time gap to car ahead in seconds
+        """
+        if self.drs_system and self.enable_tire_management:
+            self.drs_active = self.drs_system.is_drs_available(
+                gap_to_car_ahead, self.lap
+            )
+    
+    def get_drs_benefit(self) -> float:
+        """
+        Get current DRS lap time benefit.
+        
+        Returns:
+            Time saved per lap in seconds (0 if DRS not active)
+        """
+        if self.drs_active and self.drs_system:
+            return self.drs_system.get_drs_benefit()
+        return 0.0
+    
+    def calculate_overtaking_probability(
+        self,
+        car_ahead: "RacingVehicle",
+        gap_seconds: float,
+    ) -> bool:
+        """
+        Determine if this car can overtake the car ahead.
+        
+        Args:
+            car_ahead: The car being overtaken
+            gap_seconds: Current time gap
+        
+        Returns:
+            True if overtake should succeed
+        """
+        if not self.overtaking_model or not self.enable_tire_management:
+            return False
+        
+        # Calculate pace advantage (simplified - could use actual lap times)
+        my_performance = 1.0
+        their_performance = 1.0
+        
+        if self.current_tires and car_ahead.current_tires:
+            my_grip = self.current_tires.get_grip_level()
+            their_grip = car_ahead.current_tires.get_grip_level()
+            tire_advantage = (my_grip - their_grip) * 2.0  # Convert to seconds
+        else:
+            tire_advantage = 0.0
+        
+        # Fuel advantage
+        my_fuel_penalty = self.calculate_fuel_effect()
+        their_fuel_penalty = car_ahead.calculate_fuel_effect()
+        fuel_advantage = their_fuel_penalty - my_fuel_penalty
+        
+        # Total pace advantage
+        pace_advantage = tire_advantage + fuel_advantage
+        
+        return self.overtaking_model.can_overtake(
+            pace_advantage=pace_advantage,
+            gap_seconds=gap_seconds,
+            has_drs=self.drs_active,
+            tire_advantage=tire_advantage,
+        )
 
     def get_state(self) -> Dict[str, Any]:
         """Get state including racing-specific data."""
@@ -246,6 +503,19 @@ class RacingVehicle(MobilityAgent):
                 "tire_wear": round(self.tire_wear, 2),
                 "cornering_skill": round(self.cornering_skill, 2),
                 "pit_stops": self.pit_stops,
+                "fuel_mass": round(self.fuel_mass, 2),
+                "fuel_effect": round(self.calculate_fuel_effect(), 3),
+                "consistency": round(self.consistency, 2),
+                "drs_active": self.drs_active if self.enable_tire_management else False,
             }
         )
+        
+        # Add tire management data
+        if self.enable_tire_management and self.current_tires:
+            state["tire_data"] = self.current_tires.get_state()
+        
+        # Add pit strategy data
+        if self.pit_strategy:
+            state["pit_strategy"] = self.pit_strategy.get_strategy_info()
+        
         return state

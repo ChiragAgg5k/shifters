@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.121.2",
     "graphviz>=0.21",
+    "httpx>=0.28.1",
     "matplotlib>=3.10.7",
     "mesa>=3.3.1",
     "mesa-viz-tornado>=0.1.3",

@@ -47,9 +47,3 @@ htmlcov/
 # Logs
 *.log
 
-# Data files
-
-*.csv
-*.json
-!pyproject.toml
-!uv.lock

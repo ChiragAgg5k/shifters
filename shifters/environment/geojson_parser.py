@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import json
 import math
 from shifters.environment.track import Track, TrackSegment, Point3D, Checkpoint
+from shifters.data import F1_2025_RACE_DISTANCES
 
 
 class GeoJSONTrackParser:
@@ -447,8 +448,9 @@ class GeoJSONTrackParser:
         geojson_data: Dict[str, Any],
         circuit_id: Optional[str] = None,
         circuit_name: Optional[str] = None,
-        num_laps: int = 1,
+        num_laps: Optional[int] = None,
         track_width: float = 12.0,
+        use_real_race_distance: bool = True,
     ) -> Track:
         """
         Load a specific circuit from a FeatureCollection.
@@ -457,8 +459,9 @@ class GeoJSONTrackParser:
             geojson_data: GeoJSON FeatureCollection data
             circuit_id: Circuit ID to load (e.g., "mc-1929" for Monaco)
             circuit_name: Circuit name to load (e.g., "Circuit de Monaco")
-            num_laps: Number of laps
+            num_laps: Number of laps (if None and use_real_race_distance=True, uses F1 2025 calendar)
             track_width: Track width in meters
+            use_real_race_distance: If True, uses official F1 2025 race distances
 
         Returns:
             Track object
@@ -468,7 +471,7 @@ class GeoJSONTrackParser:
         """
         if geojson_data.get("type") != "FeatureCollection":
             # If it's a single Feature, use the regular from_geojson method
-            return cls.from_geojson(geojson_data, circuit_name, num_laps, track_width)
+            return cls.from_geojson(geojson_data, circuit_name, num_laps or 1, track_width)
 
         if circuit_id is None and circuit_name is None:
             raise ValueError("Must provide either circuit_id or circuit_name")
@@ -491,9 +494,50 @@ class GeoJSONTrackParser:
                 f"Circuit not found. Available circuits: {[c['name'] for c in available]}"
             )
 
-        # Extract track name from properties
+        # Extract track name and ID from properties
         props = feature.get("properties", {})
         track_name = props.get("Name", circuit_id or circuit_name)
+        track_id = props.get("id", "")
+
+        # Determine number of laps
+        if num_laps is None and use_real_race_distance:
+            # Try to match circuit ID to F1 2025 calendar
+            # Map circuit IDs to F1_2025_RACE_DISTANCES keys
+            circuit_map = {
+                "ap-1953": "albert-park",
+                "spa-1925": "spa-francorchamps",
+                "mc-1929": "monaco",
+                "rbar-2014": "red-bull-ring",
+                "silverstone-1952": "silverstone",
+                "hungaroring-1986": "hungaroring",
+                "it-1922": "monza",
+                "ba-2016": "baku",
+                "sg-2008": "singapore",
+                "cota-2012": "austin",
+                "mx-1962": "mexico-city",
+                "br-1990": "interlagos",
+                "lv-2023": "las-vegas",
+                "ymc-2009": "yas-marina",
+                "su-1987": "suzuka",
+                "sh-2004": "shanghai",
+                "sa-2021": "jeddah",
+                "miami-2022": "miami",
+                "imola-1953": "imola",
+                "ca-1978": "montreal",
+                "catalunya-1991": "catalunya",
+                "zandvoort-1952": "zandvoort",
+                "losail-2004": "losail",
+            }
+            
+            calendar_key = circuit_map.get(track_id)
+            if calendar_key and calendar_key in F1_2025_RACE_DISTANCES:
+                num_laps = F1_2025_RACE_DISTANCES[calendar_key]
+                print(f"Using F1 2025 race distance: {num_laps} laps for {track_name}")
+            else:
+                num_laps = 50  # Default fallback
+                print(f"No F1 2025 distance found for {track_name}, using {num_laps} laps")
+        elif num_laps is None:
+            num_laps = 1
 
         # Create a temporary GeoJSON with just this feature
         single_feature_geojson = {

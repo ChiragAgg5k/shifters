@@ -122,12 +122,29 @@ class SimulationManager:
             max_speed = 180 + (i * 5)
             acceleration = 12 + (i * 0.5)
 
+            # Tire management settings
+            enable_tire_management = config.get("enable_tire_management", False)
+            pit_stops_planned = config.get("pit_stops_planned", 1)
+            
+            # Starting compounds vary by driver
+            starting_compounds = None
+            if enable_tire_management:
+                try:
+                    from shifters.racing import TireCompound
+                    compounds = [TireCompound.SOFT, TireCompound.MEDIUM, TireCompound.HARD]
+                    starting_compounds = compounds[i % len(compounds)]
+                except ImportError:
+                    enable_tire_management = False
+
             vehicle = RacingVehicle(
                 model=self.simulation,
                 unique_id=f"vehicle_{i}",
                 name=vehicle_names[i % len(vehicle_names)] + f" #{i+1}",
                 max_speed=max_speed,
                 acceleration=acceleration,
+                enable_tire_management=enable_tire_management,
+                starting_compound=starting_compounds,
+                pit_stops_planned=pit_stops_planned,
             )
             self.simulation.add_agent(vehicle)
 

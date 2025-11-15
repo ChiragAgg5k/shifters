@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,13 +51,29 @@
             margin-top: 10px;
         }
 
-        .status.waiting { background: #ffa500; }
-        .status.racing { background: #4caf50; animation: pulse 1.5s infinite; }
-        .status.finished { background: #2196f3; }
+        .status.waiting {
+            background: #ffa500;
+        }
+
+        .status.racing {
+            background: #4caf50;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status.finished {
+            background: #2196f3;
+        }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .controls {
@@ -188,9 +205,17 @@
             transform: translateX(5px);
         }
 
-        .leaderboard-item.first { border-left-color: #ffd700; }
-        .leaderboard-item.second { border-left-color: #c0c0c0; }
-        .leaderboard-item.third { border-left-color: #cd7f32; }
+        .leaderboard-item.first {
+            border-left-color: #ffd700;
+        }
+
+        .leaderboard-item.second {
+            border-left-color: #c0c0c0;
+        }
+
+        .leaderboard-item.third {
+            border-left-color: #cd7f32;
+        }
 
         .rank {
             font-weight: bold;
@@ -263,8 +288,15 @@
         }
 
         @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
         }
 
         .config-section {
@@ -307,6 +339,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -335,6 +368,17 @@
                 <div class="config-item">
                     <label>Number of Laps</label>
                     <input type="number" id="numLaps" value="3" min="1" max="100">
+                </div>
+                <div class="config-item">
+                    <label>Tire Management</label>
+                    <select id="tireManagement">
+                        <option value="true">Enabled (Realistic)</option>
+                        <option value="false">Disabled (Simple)</option>
+                    </select>
+                </div>
+                <div class="config-item">
+                    <label>Planned Pit Stops</label>
+                    <input type="number" id="pitStops" value="1" min="0" max="3">
                 </div>
                 <div class="config-item">
                     <label>Track Name</label>
@@ -392,12 +436,29 @@
                             <span class="stat-value" id="trackLengthStat">-</span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">Total Distance</span>
+                            <span class="stat-label">Race Distance</span>
                             <span class="stat-value" id="totalDistanceStat">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Simulation Time</span>
+                            <span class="stat-value" id="simTimeDisplay">0.00 min</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">Leader Lap Time</span>
                             <span class="stat-value" id="bestLapTime">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Pit Stops</span>
+                            <span class="stat-value" id="totalPitStops">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats" style="margin-top: 20px;">
+                    <h2>🛞 Tire & Pit Data</h2>
+                    <div id="tireStrategyList" style="max-height: 300px; overflow-y: auto;">
+                        <div style="color: #888; padding: 10px; text-align: center;">
+                            No tire data available
                         </div>
                     </div>
                 </div>
@@ -416,6 +477,9 @@
         let ctx = canvas.getContext('2d');
         let currentState = null;
         let raceActive = false;
+
+        // Store pit entry positions for each agent (by agent ID)
+        const pitEntryPositions = new Map();
 
         // Agent colors
         const agentColors = [
@@ -473,7 +537,9 @@
             const config = {
                 num_agents: parseInt(document.getElementById('numAgents').value),
                 num_laps: parseInt(document.getElementById('numLaps').value),
-                circuit_id: circuitId
+                circuit_id: circuitId,
+                enable_tire_management: document.getElementById('tireManagement').value === 'true',
+                pit_stops_planned: parseInt(document.getElementById('pitStops').value)
             };
 
             // Only include custom track params if not using F1 circuit
@@ -552,8 +618,24 @@
             // Update stats
             if (state.environment && state.environment.track) {
                 const track = state.environment.track;
-                document.getElementById('trackLengthStat').textContent = `${track.length}m`;
-                document.getElementById('totalDistanceStat').textContent = `${track.total_distance}m`;
+                const trackLengthKm = (track.length / 1000).toFixed(2);
+                const totalDistanceKm = (track.total_distance / 1000).toFixed(2);
+                document.getElementById('trackLengthStat').textContent = `${trackLengthKm} km`;
+                document.getElementById('totalDistanceStat').textContent = `${totalDistanceKm} km`;
+            }
+
+            // Update pit stops total
+            if (state.agents) {
+                const totalPits = state.agents.reduce((sum, a) => sum + (a.pit_stops || 0), 0);
+                document.getElementById('totalPitStops').textContent = totalPits;
+            }
+
+            // Update simulation time (convert to minutes)
+            if (state.model && state.model.step_count !== undefined) {
+                const timeStep = 0.1; // seconds per step
+                const totalSeconds = state.model.step_count * timeStep;
+                const minutes = (totalSeconds / 60).toFixed(2);
+                document.getElementById('simTimeDisplay').textContent = `${minutes} min`;
             }
 
             // Draw track
@@ -561,6 +643,9 @@
 
             // Update leaderboard
             updateLeaderboard(state.standings || []);
+
+            // Update tire and pit strategy display
+            updateTireStrategy(state.agents || []);
         }
 
         function drawTrack(state) {
@@ -615,52 +700,72 @@
 
             // Draw agents on circular track
             state.agents.forEach((agent, index) => {
-                const progress = agent.position / trackLength;
-                const angle = startAngle + (progress * 2 * Math.PI);
-                const x = centerX + radius * Math.cos(angle);
-                const y = centerY + radius * Math.sin(angle);
+                // If in pit, use cached position or calculate pit lane position
+                const inPit = agent.pit_strategy && agent.pit_strategy.in_pit_lane;
 
-                drawAgent(agent, index, x, y);
+                if (inPit) {
+                    // Store pit entry position if not already stored
+                    if (!pitEntryPositions.has(agent.id)) {
+                        pitEntryPositions.set(agent.id, agent.position);
+                    }
+                    // Draw at pit entry position (frozen)
+                    const progress = pitEntryPositions.get(agent.id) / trackLength;
+                    const angle = startAngle + (progress * 2 * Math.PI);
+                    const x = centerX + radius * Math.cos(angle);
+                    const y = centerY + radius * Math.sin(angle);
+                    drawAgent(agent, index, x, y);
+                } else {
+                    // Clear pit position cache when leaving pit
+                    if (pitEntryPositions.has(agent.id)) {
+                        pitEntryPositions.delete(agent.id);
+                    }
+                    // Normal racing position
+                    const progress = agent.position / trackLength;
+                    const angle = startAngle + (progress * 2 * Math.PI);
+                    const x = centerX + radius * Math.cos(angle);
+                    const y = centerY + radius * Math.sin(angle);
+                    drawAgent(agent, index, x, y);
+                }
             });
         }
 
         function drawGeoJSONTrack(state) {
             const track = state.environment.track;
             const coords = track.coordinates;
-            
+
             // Calculate bounding box for scaling
             const minX = Math.min(...coords.map(c => c.x));
             const maxX = Math.max(...coords.map(c => c.x));
             const minY = Math.min(...coords.map(c => c.y));
             const maxY = Math.max(...coords.map(c => c.y));
-            
+
             const padding = 60;
             const availableWidth = canvas.width - 2 * padding;
             const availableHeight = canvas.height - 2 * padding;
-            
+
             const trackWidth = maxX - minX;
             const trackHeight = maxY - minY;
-            
+
             // Calculate scale to fit track in canvas
             const scale = Math.min(availableWidth / trackWidth, availableHeight / trackHeight);
-            
+
             // Center the track
             const offsetX = padding + (availableWidth - trackWidth * scale) / 2;
             const offsetY = padding + (availableHeight - trackHeight * scale) / 2;
-            
+
             // Transform function
             const transform = (coord) => ({
                 x: offsetX + (coord.x - minX) * scale,
                 y: offsetY + (coord.y - minY) * scale
             });
-            
+
             // Draw track outline
             ctx.strokeStyle = '#444';
             ctx.lineWidth = 40;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.beginPath();
-            
+
             const transformedCoords = coords.map(transform);
             if (transformedCoords.length > 0) {
                 ctx.moveTo(transformedCoords[0].x, transformedCoords[0].y);
@@ -673,7 +778,7 @@
                 }
             }
             ctx.stroke();
-            
+
             // Draw track center line
             ctx.strokeStyle = '#666';
             ctx.lineWidth = 2;
@@ -690,19 +795,19 @@
             }
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             // Draw start/finish line
             if (transformedCoords.length > 0) {
                 const start = transformedCoords[0];
                 const next = transformedCoords[1] || transformedCoords[0];
-                
+
                 // Calculate perpendicular direction for start line
                 const dx = next.x - start.x;
                 const dy = next.y - start.y;
                 const length = Math.sqrt(dx * dx + dy * dy);
                 const perpX = -dy / length * 20;
                 const perpY = dx / length * 20;
-                
+
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 6;
                 ctx.beginPath();
@@ -710,21 +815,36 @@
                 ctx.lineTo(start.x + perpX, start.y + perpY);
                 ctx.stroke();
             }
-            
+
             // Build cumulative distance array for agent positioning
             const distances = [0];
             for (let i = 1; i < coords.length; i++) {
-                const dx = coords[i].x - coords[i-1].x;
-                const dy = coords[i].y - coords[i-1].y;
+                const dx = coords[i].x - coords[i - 1].x;
+                const dy = coords[i].y - coords[i - 1].y;
                 const segmentDist = Math.sqrt(dx * dx + dy * dy);
-                distances.push(distances[i-1] + segmentDist);
+                distances.push(distances[i - 1] + segmentDist);
             }
-            
+
             // Draw agents on GeoJSON track
             state.agents.forEach((agent, index) => {
-                const progress = agent.position / track.length;
+                const inPit = agent.pit_strategy && agent.pit_strategy.in_pit_lane;
+
+                // Use pit entry position if in pit, otherwise use current position
+                let position = agent.position;
+                if (inPit) {
+                    if (!pitEntryPositions.has(agent.id)) {
+                        pitEntryPositions.set(agent.id, agent.position);
+                    }
+                    position = pitEntryPositions.get(agent.id);
+                } else {
+                    if (pitEntryPositions.has(agent.id)) {
+                        pitEntryPositions.delete(agent.id);
+                    }
+                }
+
+                const progress = position / track.length;
                 const targetDist = progress * distances[distances.length - 1];
-                
+
                 // Find which segment the agent is on
                 let segmentIndex = 0;
                 for (let i = 1; i < distances.length; i++) {
@@ -733,35 +853,47 @@
                         break;
                     }
                 }
-                
+
                 // Interpolate position within segment
                 const segStart = distances[segmentIndex];
                 const segEnd = distances[segmentIndex + 1] || distances[segmentIndex];
                 const segProgress = (segEnd - segStart) > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0;
-                
+
                 const coord1 = coords[segmentIndex];
                 const coord2 = coords[(segmentIndex + 1) % coords.length];
-                
+
                 const agentX = coord1.x + (coord2.x - coord1.x) * segProgress;
                 const agentY = coord1.y + (coord2.y - coord1.y) * segProgress;
-                
+
                 const transformed = transform({ x: agentX, y: agentY });
                 drawAgent(agent, index, transformed.x, transformed.y);
             });
         }
 
         function drawAgent(agent, index, x, y) {
+            // Check if agent is in pit (show as stationary with special indicator)
+            const inPit = agent.pit_strategy && agent.pit_strategy.in_pit_lane;
+
             // Agent circle
             const color = agentColors[index % agentColors.length];
-            ctx.fillStyle = agent.finished ? '#4caf50' : color;
+            ctx.fillStyle = agent.finished ? '#4caf50' : (inPit ? '#ff6600' : color);
             ctx.beginPath();
-            ctx.arc(x, y, 12, 0, Math.PI * 2);
+            ctx.arc(x, y, inPit ? 16 : 12, 0, Math.PI * 2);
             ctx.fill();
 
             // Agent border
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = inPit ? '#ffcc00' : '#fff';
+            ctx.lineWidth = inPit ? 3 : 2;
             ctx.stroke();
+
+            // Pit stop indicator (wrench icon)
+            if (inPit) {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('🔧', x, y + 5);
+                return; // Don't show normal label while in pit
+            }
 
             // Agent label
             ctx.fillStyle = '#fff';
@@ -797,14 +929,136 @@
                 const rankClass = index < 3 ? 'rank' : '';
                 const finishedClass = agent.finished ? 'finished' : '';
 
+                // Tire data display
+                let tireInfo = '';
+                if (agent.tire_data) {
+                    const compound = agent.tire_data.compound;
+                    const wear = agent.tire_data.wear_percentage;
+                    const compoundColors = {
+                        'SOFT': '#ff3366',
+                        'MEDIUM': '#ffd700',
+                        'HARD': '#ffffff'
+                    };
+                    const color = compoundColors[compound] || '#888';
+                    tireInfo = `<span style="color: ${color}; font-size: 0.8em;">⬤ ${compound[0]} ${wear.toFixed(0)}%</span>`;
+                }
+
+                // Pit stop indicator
+                let pitInfo = '';
+                if (agent.pit_strategy && agent.pit_strategy.in_pit_lane) {
+                    pitInfo = '<span style="color: orange;">🔧 PIT</span>';
+                } else if (agent.pit_stops > 0) {
+                    pitInfo = `<span style="color: #888; font-size: 0.8em;">⚑${agent.pit_stops}</span>`;
+                }
+
                 item.innerHTML = `
                     <div class="${rankClass}">${agent.rank}</div>
-                    <div class="agent-name ${finishedClass}">${agent.name}</div>
+                    <div class="agent-name ${finishedClass}">${agent.name} ${tireInfo} ${pitInfo}</div>
                     <div>${agent.lap}</div>
                     <div>${agent.progress.toFixed(1)}%</div>
                 `;
 
                 list.appendChild(item);
+            });
+        }
+
+        function updateTireStrategy(agents) {
+            const container = document.getElementById('tireStrategyList');
+
+            const compoundColors = {
+                'SOFT': '#ff3366',
+                'MEDIUM': '#ffd700',
+                'HARD': '#ffffff',
+                'INTERMEDIATE': '#00ff00',
+                'WET': '#3366ff'
+            };
+
+            if (!agents || agents.length === 0) {
+                container.innerHTML = '<div style="color: #888; padding: 10px; text-align: center;">No tire data available</div>';
+                return;
+            }
+
+            // Check if any agent has tire data
+            const hasTireData = agents.some(a => a.tire_data || a.pit_strategy);
+
+            if (!hasTireData) {
+                container.innerHTML = '<div style="color: #888; padding: 10px; text-align: center;">Tire management disabled</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+
+            agents.forEach((agent, index) => {
+                const agentDiv = document.createElement('div');
+                agentDiv.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 5px; font-size: 0.9em;';
+
+                let content = `<div style="font-weight: bold; color: ${agentColors[index % agentColors.length]};">${agent.name}</div>`;
+
+                // Tire data
+                if (agent.tire_data) {
+                    const tire = agent.tire_data;
+                    const color = compoundColors[tire.compound] || '#888';
+
+                    const wearBar = `<div style="width: 100px; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; display: inline-block; margin-left: 5px;">
+                        <div style="width: ${tire.wear_percentage}%; height: 100%; background: ${tire.wear_percentage > 80 ? '#ff3366' : tire.wear_percentage > 50 ? '#ffd700' : '#4caf50'}; border-radius: 3px;"></div>
+                    </div>`;
+
+                    content += `<div style="margin-top: 5px;">
+                        <span style="color: ${color};">⬤</span> ${tire.compound} 
+                        <span style="color: #aaa; font-size: 0.85em;">${tire.laps_used}L</span>
+                        ${wearBar}
+                        <span style="font-size: 0.8em; color: #aaa;">${tire.wear_percentage.toFixed(0)}%</span>
+                    </div>`;
+
+                    content += `<div style="font-size: 0.8em; color: #aaa; margin-top: 3px;">
+                        Temp: ${tire.temperature.toFixed(0)}°C | 
+                        Grip: ${(tire.grip_level * 100).toFixed(0)}%
+                    </div>`;
+                }
+
+                // Pit strategy
+                if (agent.pit_strategy) {
+                    const strat = agent.pit_strategy;
+
+                    if (strat.in_pit_lane) {
+                        content += `<div style="margin-top: 5px; color: orange; font-weight: bold;">🔧 IN PIT LANE</div>`;
+                    }
+
+                    if (strat.completed_stops && strat.completed_stops.length > 0) {
+                        content += `<div style="margin-top: 5px; font-size: 0.85em;">
+                            <div style="color: #888;">Pit Stops:</div>`;
+
+                        strat.completed_stops.forEach(stop => {
+                            const oldColor = compoundColors[stop.old_compound] || '#888';
+                            const newColor = compoundColors[stop.new_compound] || '#888';
+                            content += `<div style="margin-left: 10px; margin-top: 2px;">
+                                L${stop.lap}: <span style="color: ${oldColor};">⬤</span> → <span style="color: ${newColor};">⬤</span>
+                                <span style="color: #aaa;">${stop.duration.toFixed(1)}s</span>
+                            </div>`;
+                        });
+
+                        content += `</div>`;
+                    }
+
+                    if (strat.planned_stops && strat.planned_stops.length > 0 && !agent.finished) {
+                        const remaining = strat.planned_stops.filter(ps =>
+                            !strat.completed_stops || !strat.completed_stops.some(cs => Math.abs(cs.lap - ps.lap) <= 2)
+                        );
+
+                        if (remaining.length > 0) {
+                            content += `<div style="margin-top: 5px; font-size: 0.85em; color: #888;">
+                                Planned: `;
+                            remaining.forEach((ps, i) => {
+                                const color = compoundColors[ps.compound] || '#888';
+                                content += `${i > 0 ? ', ' : ''}L${ps.lap} <span style="color: ${color};">⬤</span>`;
+                            });
+                            content += `</div>`;
+                        }
+                    }
+                }
+
+                agentDiv.innerHTML = content;
+                container.appendChild(agentDiv);
             });
         }
 
@@ -820,10 +1074,10 @@
 
         function populateCircuitDropdown(circuits) {
             const select = document.getElementById('circuitSelect');
-            
+
             // Clear existing options except "Custom Track"
             select.innerHTML = '<option value="custom">Custom Track</option>';
-            
+
             // Add F1 circuits
             circuits.forEach(circuit => {
                 const option = document.createElement('option');
@@ -847,7 +1101,7 @@
                 // Disable inputs for F1 circuits - they'll be loaded from GeoJSON
                 trackLengthInput.disabled = true;
                 trackNameInput.readOnly = true;
-                
+
                 // Find selected circuit to display its name
                 const select = document.getElementById('circuitSelect');
                 const selectedOption = select.options[select.selectedIndex];
@@ -863,4 +1117,5 @@
         };
     </script>
 </body>
+
 </html>
