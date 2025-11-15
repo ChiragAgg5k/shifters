@@ -17,6 +17,10 @@ export interface VehicleConfig {
   qualifyingPosition?: number
   lapTimeStd?: number
   dnfProbability?: number
+  // Advanced physics parameters (RL training)
+  differentialPreload?: number  // 0-100 Nm, optimal ~50
+  engineBraking?: number         // 0.0-1.0, where 0=min harvesting, 1=max braking
+  brakeBalance?: number          // 0.0-1.0, front bias (optimal ~0.52-0.56)
 }
 
 export interface VehicleState {
@@ -60,6 +64,33 @@ export class RacingVehicle {
   dragCoefficient: number
   frontalArea: number
   downforceCoefficient: number
+  
+  // Shorthand aliases for physics calculations
+  Cd: number
+  A: number
+  Cl: number
+  g: number = 9.81
+  rho: number = 1.225
+  mu: number = 1.8
+  
+  // Vehicle geometry (for load transfer)
+  wheelbase: number = 3.6
+  cgHeight: number = 0.35
+  trackWidth: number = 2.0
+  frontWeightDist: number = 0.46
+  
+  // Advanced physics parameters
+  differentialPreload: number
+  engineBraking: number
+  brakeBalance: number
+  
+  // Physics state variables
+  frontLoad: number = 0
+  rearLoad: number = 0
+  lateralLoad: number = 0
+  tractionFactor: number = 1.0
+  downforceLevel: number = 0
+  brakeEfficiency: number = 1.0
   
   // Race state
   lap: number = 0
@@ -116,6 +147,16 @@ export class RacingVehicle {
     this.frontalArea = config.frontalArea || 1.5 // m²
     this.downforceCoefficient = config.downforceCoefficient || 3.0
     
+    // Aliases for calculations
+    this.Cd = this.dragCoefficient
+    this.A = this.frontalArea
+    this.Cl = this.downforceCoefficient
+    
+    // Advanced physics parameters with defaults
+    this.differentialPreload = config.differentialPreload ?? 50.0  // Nm
+    this.engineBraking = config.engineBraking ?? 0.5               // 50% default
+    this.brakeBalance = config.brakeBalance ?? 0.54                // 54% front
+    
     // Driver parameters
     this.qualifyingPosition = config.qualifyingPosition || 1
     this.lapTimeStd = config.lapTimeStd || 0.15
@@ -127,18 +168,48 @@ export class RacingVehicle {
 
   /**
    * Calculate target speed based on track curvature, weather, and vehicle state
+   * Enhanced with proper force balance and load-sensitive tire model
    */
   calculateTargetSpeed(curvature: number, weather: string, trackTemp: number): void {
     this.currentCurvature = curvature
     
+    // Calculate downforce at current speed
+    this.downforceLevel = 0.5 * this.rho * this.Cl * this.A * (this.speed ** 2)
+    
+    // Total normal force = weight + downforce
+    const normalForce = (this.mass * this.g) + this.downforceLevel
+    
+    // Load-sensitive tire model
+    // Nominal load per tire (static, no downforce)
+    const nominalLoadPerTire = (this.mass * this.g) / 4 // 1956.6 N for 798kg car
+    
+    // Current load per tire (with downforce)
+    const currentLoadPerTire = normalForce / 4
+    
+    // Tire load sensitivity: -3% grip per 1000N over nominal
+    const excessLoad = (currentLoadPerTire - nominalLoadPerTire) / 1000
+    const tireLoadFactor = 1.0 - (excessLoad * 0.03)
+    
+    // Effective friction coefficient
+    const effectiveFriction = this.mu * tireLoadFactor
+    
     // Base speed calculation
     if (curvature === 0) {
-      // Straight: full speed
-      this.targetSpeed = this.maxSpeed
+      // Straight: full speed with traction factor
+      this.targetSpeed = this.maxSpeed * this.tractionFactor
     } else {
-      // Corner: speed based on curvature and cornering skill
-      const baseCornerSpeed = this.maxSpeed / (1 + curvature * 10)
-      this.targetSpeed = baseCornerSpeed * this.corneringSkill
+      // Corner: physics-based max speed
+      // v_max = sqrt((μ * N * r) / m)
+      const radius = 1.0 / curvature
+      
+      // Calculate maximum cornering speed from force balance
+      const maxCorneringSpeed = Math.sqrt(
+        (effectiveFriction * normalForce * radius) / this.mass
+      )
+      
+      // Apply cornering skill (driver skill affects how close to limit they get)
+      // 1.0 = perfect, >1.0 = slightly over limit (risky), <1.0 = conservative
+      this.targetSpeed = maxCorneringSpeed * Math.min(this.corneringSkill, 1.15)
     }
     
     // Weather effects on grip
@@ -154,14 +225,11 @@ export class RacingVehicle {
     const tempDiff = Math.abs(this.tireTemperature - optimalTireTemp)
     const tireGripMultiplier = 1.0 - (tempDiff / 200) // Lose grip when too cold/hot
     
-    // Downforce contribution to cornering speed
-    const downforceBonus = curvature > 0 ? (this.downforceCoefficient * 0.05) : 0
-    
     // Damage reduces cornering ability
     const damageMultiplier = 1.0 - (this.damageLevel / 200)
     
     // Apply all multipliers
-    this.targetSpeed *= gripMultiplier * tireGripMultiplier * (1 + downforceBonus) * damageMultiplier
+    this.targetSpeed *= gripMultiplier * tireGripMultiplier * damageMultiplier
     
     // Energy limit
     if (this.energy < 10) {
@@ -171,6 +239,7 @@ export class RacingVehicle {
 
   /**
    * Update vehicle physics for one time step
+   * Enhanced with load transfer, differential, engine braking, and brake balance
    */
   move(timeStep: number, trackLength: number): void {
     // Driver consistency variation
@@ -181,8 +250,7 @@ export class RacingVehicle {
     this.overtakenThisLap = false
     
     // Aerodynamic drag: F_drag = 0.5 * ρ * Cd * A * v²
-    const airDensity = 1.225 // kg/m³
-    let dragForce = 0.5 * airDensity * this.dragCoefficient * this.frontalArea * (this.speed ** 2)
+    let dragForce = 0.5 * this.rho * this.Cd * this.A * (this.speed ** 2)
     
     // DRS reduces drag by 25% on straights
     if (this.drsActive && this.currentCurvature === 0) {
@@ -194,22 +262,70 @@ export class RacingVehicle {
       dragForce *= 0.70
     }
     
-    // Downforce: F_downforce = 0.5 * ρ * Cl * A * v²
-    const downforce = 0.5 * airDensity * this.downforceCoefficient * this.frontalArea * (this.speed ** 2)
+    // Downforce already calculated in calculateTargetSpeed
+    // this.downforceLevel is up-to-date
     
     // Drag reduces acceleration
     const dragDeceleration = dragForce / this.mass
     
+    // Calculate lateral and longitudinal acceleration for load transfer
+    let lateralAccel = 0
+    let longitudinalAccel = 0
+    
+    if (this.currentCurvature > 0) {
+      // Lateral acceleration in corners: a = v² / r
+      const radius = 1.0 / this.currentCurvature
+      lateralAccel = (this.speed ** 2) / radius
+    }
+    
+    // Determine if accelerating or braking
+    const speedDiff = this.targetSpeed - this.speed
+    
     // Apply acceleration/braking
     if (this.speed < this.targetSpeed) {
-      const netAcceleration = this.acceleration - dragDeceleration
+      // Accelerating
+      longitudinalAccel = this.acceleration - dragDeceleration
+      
+      // Calculate load transfer
+      const wheelLoads = this.calculateLoadTransfer(lateralAccel, longitudinalAccel)
+      
+      // Calculate differential effect (estimate wheel speeds)
+      const outerWheelSpeed = this.speed * (1 + this.currentCurvature * 2)
+      const innerWheelSpeed = this.speed * (1 - this.currentCurvature * 2)
+      this.calculateDifferentialEffect(outerWheelSpeed, innerWheelSpeed)
+      
+      // Apply traction factor from differential
+      const netAcceleration = longitudinalAccel * this.tractionFactor
       this.speed = Math.min(this.speed + netAcceleration * timeStep, this.targetSpeed)
+      
     } else if (this.speed > this.targetSpeed) {
-      const netBraking = this.brakingRate + dragDeceleration
-      this.speed = Math.max(this.speed - netBraking * timeStep, this.targetSpeed)
+      // Braking
+      longitudinalAccel = -this.brakingRate
+      
+      // Calculate load transfer (braking shifts weight forward)
+      const wheelLoads = this.calculateLoadTransfer(lateralAccel, longitudinalAccel)
+      
+      // Calculate engine braking
+      const engineBrakingDecel = this.calculateEngineBraking(longitudinalAccel)
+      
+      // Calculate brake distribution and check for lock-up
+      const brakeResult = this.calculateBrakeDistribution(this.brakingRate, wheelLoads)
+      
+      // Total deceleration: drag + engine braking + actual brakes
+      const totalDeceleration = dragDeceleration + Math.abs(engineBrakingDecel) + brakeResult.deceleration
+      
+      this.speed = Math.max(this.speed - totalDeceleration * timeStep, this.targetSpeed)
+      
     } else {
-      // Maintain speed with drag
-      this.speed = Math.max(0, this.speed - dragDeceleration * timeStep)
+      // Maintaining speed
+      // Still calculate load transfer for corners
+      const wheelLoads = this.calculateLoadTransfer(lateralAccel, 0)
+      
+      // Engine braking when coasting
+      const engineBrakingDecel = this.calculateEngineBraking(0)
+      const totalDecel = dragDeceleration + Math.abs(engineBrakingDecel)
+      
+      this.speed = Math.max(0, this.speed - totalDecel * timeStep)
     }
     
     // Calculate movement
@@ -345,6 +461,207 @@ export class RacingVehicle {
     this.totalTime += actualPitDuration
     
     return actualPitDuration
+  }
+
+  /**
+   * Calculate load transfer during acceleration/braking and cornering
+   * Returns [frontLeft, frontRight, rearLeft, rearRight] loads in Newtons
+   */
+  private calculateLoadTransfer(lateralAccel: number, longitudinalAccel: number): number[] {
+    // Static weight distribution
+    const totalWeight = this.mass * this.g
+    const frontStaticLoad = totalWeight * this.frontWeightDist
+    const rearStaticLoad = totalWeight * (1 - this.frontWeightDist)
+    
+    // Longitudinal load transfer (braking/acceleration)
+    const longLoadTransfer = (this.mass * longitudinalAccel * this.cgHeight) / this.wheelbase
+    
+    // Lateral load transfer (cornering)
+    const latLoadTransfer = (this.mass * lateralAccel * this.cgHeight) / (0.5 * this.trackWidth)
+    
+    // Distribute to 4 wheels
+    const frontLoad = frontStaticLoad - longLoadTransfer
+    const rearLoad = rearStaticLoad + longLoadTransfer
+    
+    // Split left/right based on lateral transfer
+    const frontLeft = frontLoad / 2 - latLoadTransfer / 2
+    const frontRight = frontLoad / 2 + latLoadTransfer / 2
+    const rearLeft = rearLoad / 2 - latLoadTransfer / 2
+    const rearRight = rearLoad / 2 + latLoadTransfer / 2
+    
+    // Update state variables
+    this.frontLoad = frontLoad
+    this.rearLoad = rearLoad
+    this.lateralLoad = latLoadTransfer
+    
+    return [frontLeft, frontRight, rearLeft, rearRight]
+  }
+
+  /**
+   * Calculate differential effect on traction
+   * Limited Slip Differential (LSD) model
+   */
+  private calculateDifferentialEffect(outerWheelSpeed: number, innerWheelSpeed: number): number {
+    // Wheel speed difference (higher in tight corners)
+    const speedDiff = Math.abs(outerWheelSpeed - innerWheelSpeed)
+    
+    // Base preload torque
+    const preloadTorque = this.differentialPreload
+    
+    // Locking coefficient (0.3 to 0.8 depending on diff type)
+    const lockingCoef = 0.5 // Medium LSD
+    
+    // Calculate lock torque based on wheel speed difference
+    const maxTorque = 500 // Nm, typical F1 torque
+    const lockTorque = preloadTorque + (lockingCoef * maxTorque * (speedDiff / 100))
+    
+    // Traction boost/penalty
+    // High preload = better traction out of corners but less rotation
+    if (speedDiff < 5) {
+      // Low wheel speed difference (straight or fast corner)
+      this.tractionFactor = 1.0 + (this.differentialPreload / 1000)
+    } else {
+      // High wheel speed difference (tight corner)
+      // Too much preload causes understeer, too little causes wheelspin
+      const optimalPreload = 50.0
+      const deviation = Math.abs(this.differentialPreload - optimalPreload)
+      this.tractionFactor = 1.0 + ((100 - deviation) / 1000)
+    }
+    
+    return this.tractionFactor
+  }
+
+  /**
+   * Calculate engine braking effect
+   * Returns deceleration in m/s²
+   */
+  private calculateEngineBraking(currentAccel: number): number {
+    // Only applies when off throttle (not accelerating)
+    if (currentAccel >= 0) {
+      return 0
+    }
+    
+    // RPM factor (higher speed = higher RPM = more engine braking)
+    const rpmFactor = this.speed / this.maxSpeed
+    
+    // Base engine braking at max RPM
+    const baseEngineBraking = -2.5 // m/s²
+    
+    // Scale by RPM and setting
+    const engineBrakingForce = baseEngineBraking * rpmFactor * this.engineBraking
+    
+    return engineBrakingForce
+  }
+
+  /**
+   * Calculate brake force distribution and detect lock-up
+   * Returns effective braking deceleration
+   */
+  private calculateBrakeDistribution(
+    requestedBraking: number,
+    wheelLoads: number[]
+  ): { deceleration: number; frontLocked: boolean; rearLocked: boolean } {
+    const [frontLeft, frontRight, rearLeft, rearRight] = wheelLoads
+    
+    // Total brake force requested
+    const totalBrakeForce = requestedBraking * this.mass
+    
+    // Distribute based on brake balance
+    const frontBrakeForce = totalBrakeForce * this.brakeBalance
+    const rearBrakeForce = totalBrakeForce * (1 - this.brakeBalance)
+    
+    // Maximum brake force before lock-up (limited by tire grip)
+    const brakeCoef = 0.95 // Slightly less than tire friction
+    const maxFrontBrake = this.mu * (frontLeft + frontRight) * brakeCoef
+    const maxRearBrake = this.mu * (rearLeft + rearRight) * brakeCoef
+    
+    // Detect lock-up
+    const frontLocked = frontBrakeForce > maxFrontBrake
+    const rearLocked = rearBrakeForce > maxRearBrake
+    
+    // Actual brake forces (limited by grip)
+    const actualFrontBrake = Math.min(frontBrakeForce, maxFrontBrake)
+    const actualRearBrake = Math.min(rearBrakeForce, maxRearBrake)
+    
+    // Calculate brake efficiency
+    const requestedTotal = frontBrakeForce + rearBrakeForce
+    const actualTotal = actualFrontBrake + actualRearBrake
+    this.brakeEfficiency = requestedTotal > 0 ? actualTotal / requestedTotal : 1.0
+    
+    // Lock-up penalty
+    if (frontLocked || rearLocked) {
+      this.brakeEfficiency *= 0.6 // 40% penalty for locked wheels
+    }
+    
+    // Return effective deceleration
+    const deceleration = (actualTotal / this.mass) * this.brakeEfficiency
+    
+    return { deceleration, frontLocked, rearLocked }
+  }
+
+  /**
+   * Get RL state vector (13 dimensions)
+   */
+  getRLStateVector(): number[] {
+    return [
+      this.speed,
+      this.currentCurvature,
+      0, // distance_to_next_corner (would need track lookahead)
+      this.tireTemperature,
+      this.energy,
+      this.differentialPreload,
+      this.engineBraking,
+      this.brakeBalance,
+      this.frontLoad,
+      this.rearLoad,
+      this.lateralLoad,
+      this.tractionFactor,
+      this.downforceLevel
+    ]
+  }
+
+  /**
+   * Get RL reward signal (-15 to +14)
+   */
+  getRLReward(): number {
+    // Lap time reward: -10 to +10
+    // (would need reference lap time)
+    const lapTimeReward = 0
+    
+    // Efficiency reward: -5 to +2
+    const energyEfficiency = this.energy / 100
+    const tireEfficiency = 1.0 - (this.tireWear / 100)
+    const brakeEff = this.brakeEfficiency
+    const efficiencyReward = (energyEfficiency + tireEfficiency + brakeEff - 1.5) * 2
+    
+    // Consistency reward: 0 to +1
+    const consistencyReward = this.brakeEfficiency > 0.9 ? 1.0 : 0.5
+    
+    // Safety reward: 0 to +1
+    const safetyReward = this.damageLevel === 0 ? 1.0 : 0.0
+    
+    return lapTimeReward + efficiencyReward + consistencyReward + safetyReward
+  }
+
+  /**
+   * Adjust differential preload (for RL training)
+   */
+  adjustDifferential(delta: number): void {
+    this.differentialPreload = Math.max(0, Math.min(100, this.differentialPreload + delta))
+  }
+
+  /**
+   * Adjust engine braking (for RL training)
+   */
+  adjustEngineBraking(delta: number): void {
+    this.engineBraking = Math.max(0, Math.min(1, this.engineBraking + delta))
+  }
+
+  /**
+   * Adjust brake balance (for RL training)
+   */
+  adjustBrakeBalance(delta: number): void {
+    this.brakeBalance = Math.max(0, Math.min(1, this.brakeBalance + delta))
   }
 
   /**

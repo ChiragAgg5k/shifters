@@ -33,9 +33,14 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
   const [agentAcceleration, setAgentAcceleration] = useState(12.5)
   const [agentDnfProbability, setAgentDnfProbability] = useState(2)
   
+  // Advanced physics parameters
+  const [agentDifferential, setAgentDifferential] = useState(50)
+  const [agentEngineBraking, setAgentEngineBraking] = useState(0.5)
+  const [agentBrakeBalance, setAgentBrakeBalance] = useState(0.54)
+  
   // Per-agent customization
   const [perAgentCustomize, setPerAgentCustomize] = useState(false)
-  const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, { maxSpeed: number; acceleration: number; dnfProbability: number }>>({})
+  const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, { maxSpeed: number; acceleration: number; dnfProbability: number; differentialPreload?: number; engineBraking?: number; brakeBalance?: number }>>({})
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null)
 
   // Load circuits from public folder
@@ -73,7 +78,10 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
       acc[parseInt(idx)] = {
         maxSpeed: cfg.maxSpeed,
         acceleration: cfg.acceleration,
-        dnfProbability: cfg.dnfProbability / 100
+        dnfProbability: cfg.dnfProbability / 100,
+        differentialPreload: cfg.differentialPreload,
+        engineBraking: cfg.engineBraking,
+        brakeBalance: cfg.brakeBalance
       }
       return acc
     }, {} as Record<number, any>) : undefined
@@ -91,7 +99,10 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
       agentConfig: customizeAgents ? {
         maxSpeed: agentMaxSpeed,
         acceleration: agentAcceleration,
-        dnfProbability: agentDnfProbability / 100 // Convert percentage to 0-1
+        dnfProbability: agentDnfProbability / 100, // Convert percentage to 0-1
+        differentialPreload: agentDifferential,
+        engineBraking: agentEngineBraking,
+        brakeBalance: agentBrakeBalance
       } : undefined,
       perAgentConfig: perAgentCfg
     })
@@ -278,6 +289,61 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
             </div>
           </div>
         )}
+
+        {customizeAgents && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-input/50 p-4 rounded-md mt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Differential Preload: {agentDifferential} Nm
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={agentDifferential}
+                onChange={(e) => setAgentDifferential(parseFloat(e.target.value))}
+                disabled={raceActive}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+              />
+              <div className="text-xs text-muted-foreground text-center">0 - 100 Nm (optimal: 50)</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Engine Braking: {(agentEngineBraking * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={agentEngineBraking}
+                onChange={(e) => setAgentEngineBraking(parseFloat(e.target.value))}
+                disabled={raceActive}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+              />
+              <div className="text-xs text-muted-foreground text-center">0 - 100% (typical: 50%)</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Brake Balance: {(agentBrakeBalance * 100).toFixed(0)}% Front
+              </label>
+              <input
+                type="range"
+                min="0.4"
+                max="0.7"
+                step="0.01"
+                value={agentBrakeBalance}
+                onChange={(e) => setAgentBrakeBalance(parseFloat(e.target.value))}
+                disabled={raceActive}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+              />
+              <div className="text-xs text-muted-foreground text-center">40 - 70% (optimal: 52-56%)</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Per-Agent Customization Section */}
@@ -311,59 +377,118 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 </button>
 
                 {expandedAgent === i && (
-                  <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-border">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Speed: {(perAgentConfigs[i]?.maxSpeed ?? 90).toFixed(1)} m/s
-                      </label>
-                      <input
-                        type="range"
-                        min="70"
-                        max="110"
-                        step="1"
-                        value={perAgentConfigs[i]?.maxSpeed ?? 90}
-                        onChange={(e) => setPerAgentConfigs({
-                          ...perAgentConfigs,
-                          [i]: { ...perAgentConfigs[i], maxSpeed: parseFloat(e.target.value) }
-                        })}
-                        className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
-                      />
+                  <div className="space-y-3 mt-3 pt-3 border-t border-border">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Speed: {(perAgentConfigs[i]?.maxSpeed ?? 90).toFixed(1)} m/s
+                        </label>
+                        <input
+                          type="range"
+                          min="70"
+                          max="110"
+                          step="1"
+                          value={perAgentConfigs[i]?.maxSpeed ?? 90}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], maxSpeed: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Accel: {(perAgentConfigs[i]?.acceleration ?? 12.5).toFixed(2)} m/s²
+                        </label>
+                        <input
+                          type="range"
+                          min="8"
+                          max="16"
+                          step="0.1"
+                          value={perAgentConfigs[i]?.acceleration ?? 12.5}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], acceleration: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          DNF: {(perAgentConfigs[i]?.dnfProbability ?? 2).toFixed(1)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={perAgentConfigs[i]?.dnfProbability ?? 2}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], dnfProbability: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Accel: {(perAgentConfigs[i]?.acceleration ?? 12.5).toFixed(2)} m/s²
-                      </label>
-                      <input
-                        type="range"
-                        min="8"
-                        max="16"
-                        step="0.1"
-                        value={perAgentConfigs[i]?.acceleration ?? 12.5}
-                        onChange={(e) => setPerAgentConfigs({
-                          ...perAgentConfigs,
-                          [i]: { ...perAgentConfigs[i], acceleration: parseFloat(e.target.value) }
-                        })}
-                        className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
+                    <div className="text-xs text-muted-foreground font-semibold pt-2">Advanced Physics</div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Diff: {(perAgentConfigs[i]?.differentialPreload ?? 50).toFixed(0)} Nm
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={perAgentConfigs[i]?.differentialPreload ?? 50}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], differentialPreload: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        DNF: {(perAgentConfigs[i]?.dnfProbability ?? 2).toFixed(1)}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={perAgentConfigs[i]?.dnfProbability ?? 2}
-                        onChange={(e) => setPerAgentConfigs({
-                          ...perAgentConfigs,
-                          [i]: { ...perAgentConfigs[i], dnfProbability: parseFloat(e.target.value) }
-                        })}
-                        className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
-                      />
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          EB: {((perAgentConfigs[i]?.engineBraking ?? 0.5) * 100).toFixed(0)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={perAgentConfigs[i]?.engineBraking ?? 0.5}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], engineBraking: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          BB: {((perAgentConfigs[i]?.brakeBalance ?? 0.54) * 100).toFixed(0)}%F
+                        </label>
+                        <input
+                          type="range"
+                          min="0.4"
+                          max="0.7"
+                          step="0.01"
+                          value={perAgentConfigs[i]?.brakeBalance ?? 0.54}
+                          onChange={(e) => setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], brakeBalance: parseFloat(e.target.value) }
+                          })}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

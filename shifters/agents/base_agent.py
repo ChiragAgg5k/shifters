@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any, TYPE_CHECKING
 from mesa import Agent
 import uuid
+import math
 
 if TYPE_CHECKING:
     from shifters.environment.track import Point3D
@@ -189,6 +190,10 @@ class RacingVehicle(MobilityAgent):
         qualifying_position: int = 1,  # Grid position (1-22)
         lap_time_std: float = 0.3,  # Lap-time variability (0.2=metronomic, 0.7=inconsistent)
         dnf_probability: float = 0.02,  # Probability of DNF per race
+        # Advanced vehicle dynamics settings (RL adjustable)
+        differential_preload: float = 50.0,  # Nm (0-100, affects corner exit traction)
+        engine_braking: float = 0.3,  # 0-1 (fraction of max deceleration from engine)
+        brake_balance: float = 0.56,  # 0-1 (0=all rear, 1=all front, optimal ~0.56)
         **kwargs,
     ):
         """
@@ -234,6 +239,26 @@ class RacingVehicle(MobilityAgent):
         self.grid_penalty = (qualifying_position - 1) * 0.25  # 0.25s per grid position
         self.start_bonus = 0.0  # Set based on historical start performance
         
+        # Advanced vehicle dynamics (RL adjustable parameters)
+        self.differential_preload = differential_preload  # Nm, affects torque distribution
+        self.engine_braking = engine_braking  # 0-1, engine deceleration contribution
+        self.brake_balance = brake_balance  # 0-1, front/rear brake distribution
+        
+        # Vehicle geometry for physics calculations
+        self.wheelbase = 3.6  # meters (F1 typical)
+        self.track_width_front = 1.8  # meters
+        self.track_width_rear = 1.6  # meters
+        self.cg_height = 0.35  # meters, center of gravity height
+        self.weight_distribution = 0.46  # Front weight distribution (46% front, 54% rear)
+        
+        # Dynamic state tracking for differential and braking
+        self.wheel_speed_left = 0.0  # m/s
+        self.wheel_speed_right = 0.0  # m/s
+        self.lateral_load_transfer = 0.0  # N
+        self.longitudinal_load_transfer = 0.0  # N
+        self.brake_temp_front = 400.0  # °C (optimal 400-800°C)
+        self.brake_temp_rear = 400.0  # °C
+        
         # Performance tracking
         self.overtakes = 0
         self.positions_gained = 0
@@ -241,6 +266,11 @@ class RacingVehicle(MobilityAgent):
         self.overtaken_this_lap = False  # Flag for time penalty when overtaken
         self.last_dnf_check_lap = -1  # Track which lap we last checked for DNF
         self.just_crossed_line = False  # Flag to prevent visual teleporting
+        
+        # RL reward/loss tracking
+        self.traction_efficiency = 1.0  # 0-1, how well power is being used
+        self.braking_efficiency = 1.0  # 0-1, how optimal braking is
+        self.corner_exit_quality = 1.0  # 0-1, corner exit performance
 
     def _calculate_target_speed(self):
         """Calculate target speed with cornering skill, downforce, and weather."""
@@ -258,24 +288,268 @@ class RacingVehicle(MobilityAgent):
             grip_multiplier = 0.85  # 15% less grip on wet track
         
         # Tire temperature effects (optimal: 80-100°C)
+        tire_temp_factor = 1.0
         if self.tire_temperature < 60:
-            grip_multiplier *= 0.9  # Cold tires
+            tire_temp_factor = 0.9  # Cold tires
         elif self.tire_temperature > 110:
-            grip_multiplier *= 0.85  # Overheated tires
+            tire_temp_factor = 0.85  # Overheated tires
+        
+        grip_multiplier *= tire_temp_factor
         
         # Downforce increases cornering speed at high speeds
         if self.current_curvature > 0:
             # Base cornering skill
             skill_factor = self.cornering_skill * grip_multiplier
             
-            # Downforce effect (more effective at higher speeds)
-            speed_ratio = self.speed / self.max_speed
-            downforce_factor = 1.0 + (self.downforce_coefficient * 0.1 * speed_ratio)
+            # Calculate downforce at current speed: F_df = 0.5 * ρ * Cl * A * v²
+            air_density = 1.225  # kg/m³
+            downforce = 0.5 * air_density * self.downforce_coefficient * self.frontal_area * (self.speed ** 2)
             
-            # Damage reduces cornering ability
-            damage_factor = 1.0 - (self.damage_level * 0.003)  # Up to 30% reduction at 100% damage
+            # Total normal force = weight + downforce
+            gravity = 9.81  # m/s²
+            weight_force = self.mass * gravity
+            total_normal_force = weight_force + downforce
             
-            self.target_speed *= skill_factor * downforce_factor * damage_factor
+            # Tire load sensitivity: μ_effective = μ_peak * (1 - load_sensitivity * (N/N_ref - 1))
+            # F1 tires have ~3% reduction per 1000N above reference load
+            reference_load = weight_force
+            load_sensitivity = 0.00003  # per Newton
+            load_ratio = total_normal_force / reference_load
+            tire_load_factor = 1.0 - load_sensitivity * (total_normal_force - reference_load)
+            tire_load_factor = max(0.85, min(1.0, tire_load_factor))  # Clamp 0.85-1.0
+            
+            # Maximum cornering speed: v = sqrt((F_friction_max * r) / m)
+            # F_friction_max = μ * N_total * tire_load_factor
+            friction_coefficient = 1.4 * grip_multiplier * tire_load_factor  # Racing slicks
+            max_lateral_force = friction_coefficient * total_normal_force
+            
+            # Centripetal force requirement: F_c = m * v² / r
+            # Solving for v: v = sqrt((F_friction * r) / m)
+            if self.current_curvature > 0:
+                corner_radius = 1.0 / self.current_curvature if self.current_curvature > 0 else 1000.0
+                max_corner_speed = math.sqrt((max_lateral_force * corner_radius) / self.mass)
+                
+                # Apply skill and damage factors
+                damage_factor = 1.0 - (self.damage_level * 0.003)  # Up to 30% reduction at 100% damage
+                
+                # Calculate ideal target speed
+                self.target_speed = min(self.target_speed, max_corner_speed * skill_factor * damage_factor)
+
+    def _calculate_load_transfer(self, lateral_accel: float, longitudinal_accel: float) -> Dict[str, float]:
+        """
+        Calculate load transfer under acceleration, braking, and cornering.
+        Critical for differential and brake balance optimization.
+        
+        Args:
+            lateral_accel: Lateral acceleration in m/s² (cornering)
+            longitudinal_accel: Longitudinal acceleration in m/s² (+accel, -braking)
+        
+        Returns:
+            Dict with wheel loads (N) for FL, FR, RL, RR
+        """
+        gravity = 9.81
+        weight = self.mass * gravity
+        
+        # Static weight distribution
+        front_static = weight * self.weight_distribution
+        rear_static = weight * (1 - self.weight_distribution)
+        
+        # Longitudinal load transfer: ΔF_z = (m * a_x * h) / L
+        # where h = CG height, L = wheelbase
+        long_transfer = (self.mass * longitudinal_accel * self.cg_height) / self.wheelbase
+        
+        # Lateral load transfer front: ΔF_z_f = (m_f * a_y * h) / t_f
+        # where m_f = front mass, t_f = front track width
+        front_mass = self.mass * self.weight_distribution
+        rear_mass = self.mass * (1 - self.weight_distribution)
+        
+        lat_transfer_front = (front_mass * lateral_accel * self.cg_height) / self.track_width_front
+        lat_transfer_rear = (rear_mass * lateral_accel * self.cg_height) / self.track_width_rear
+        
+        # Calculate individual wheel loads
+        # Longitudinal: accel transfers to rear, braking to front
+        front_load = front_static - long_transfer
+        rear_load = rear_static + long_transfer
+        
+        # Lateral: outside wheels gain load, inside wheels lose load
+        loads = {
+            'FL': (front_load / 2) + lat_transfer_front if lateral_accel > 0 else (front_load / 2) - lat_transfer_front,
+            'FR': (front_load / 2) - lat_transfer_front if lateral_accel > 0 else (front_load / 2) + lat_transfer_front,
+            'RL': (rear_load / 2) + lat_transfer_rear if lateral_accel > 0 else (rear_load / 2) - lat_transfer_rear,
+            'RR': (rear_load / 2) - lat_transfer_rear if lateral_accel > 0 else (rear_load / 2) + lat_transfer_rear,
+        }
+        
+        # Store for other calculations
+        self.lateral_load_transfer = abs(lat_transfer_front + lat_transfer_rear)
+        self.longitudinal_load_transfer = abs(long_transfer)
+        
+        return loads
+    
+    def _calculate_differential_effect(self, corner_radius: float, speed: float) -> float:
+        """
+        Calculate differential effect on corner exit traction.
+        
+        Limited-slip differential (LSD) with preload affects how power is distributed
+        between inside and outside wheels. Higher preload = more locked = better 
+        traction but increased understeer.
+        
+        Args:
+            corner_radius: Radius of corner (meters)
+            speed: Current speed (m/s)
+        
+        Returns:
+            Traction efficiency multiplier (0-1)
+        """
+        if corner_radius == 0 or corner_radius > 1000:  # Straight line
+            return 1.0
+        
+        # Calculate required speed difference between inside and outside wheels
+        # v_outer / v_inner = (R + t/2) / (R - t/2)
+        track_width = self.track_width_rear  # Differential on rear axle
+        speed_ratio = (corner_radius + track_width/2) / (corner_radius - track_width/2)
+        speed_diff_required = speed * (speed_ratio - 1)
+        
+        # Preload creates locking torque: T_lock = preload + K * T_input
+        # Higher preload resists speed difference
+        # Normalize preload 0-100 to locking coefficient 0-1
+        locking_coefficient = self.differential_preload / 100.0
+        
+        # Allowed slip: higher preload = less slip = worse for tight corners, better for exit
+        max_allowed_slip = 5.0 * (1.0 - locking_coefficient)  # m/s
+        
+        # Calculate traction loss from wheel slip
+        if speed_diff_required > max_allowed_slip:
+            # Inside wheel spinning or outside wheel dragging
+            slip_excess = speed_diff_required - max_allowed_slip
+            traction_loss = min(0.3, slip_excess / 10.0)  # Up to 30% loss
+            efficiency = 1.0 - traction_loss
+        else:
+            # Optimal - diff allows necessary slip
+            efficiency = 1.0
+        
+        # Corner exit: higher preload improves traction (locks diff, prevents inside spin)
+        # This is the key RL optimization - balance corner entry vs exit
+        if self.speed < self.target_speed:  # Accelerating (corner exit)
+            exit_bonus = locking_coefficient * 0.15  # Up to 15% better traction
+            efficiency = min(1.0, efficiency + exit_bonus)
+        
+        self.traction_efficiency = efficiency
+        return efficiency
+    
+    def _calculate_engine_braking(self, speed_diff: float) -> float:
+        """
+        Calculate engine braking contribution to deceleration.
+        
+        Engine braking occurs when throttle is released. Setting affects:
+        - Rear stability (high = more rear braking = potential oversteer)
+        - Brake wear (high engine braking = less brake usage)
+        - Corner entry balance
+        
+        Args:
+            speed_diff: Target speed - current speed (negative when slowing)
+        
+        Returns:
+            Additional deceleration in m/s²
+        """
+        if speed_diff >= 0:  # Not braking
+            return 0.0
+        
+        # Engine braking strength depends on RPM (approximated by speed)
+        # Higher speed = higher RPM = more engine braking
+        speed_ratio = self.speed / self.max_speed
+        rpm_factor = 0.5 + (speed_ratio * 0.5)  # 0.5-1.0 based on speed
+        
+        # Maximum engine braking ~6-8 m/s² for F1
+        max_engine_brake = 7.0  # m/s²
+        
+        # Apply driver setting (0-1)
+        engine_brake_force = max_engine_brake * self.engine_braking * rpm_factor
+        
+        # Engine braking only affects rear wheels (RWD)
+        # This creates potential oversteer on corner entry
+        # RL can optimize: high for stability, low for rotation
+        
+        return engine_brake_force
+    
+    def _calculate_brake_distribution(self, total_brake_force: float, loads: Dict[str, float]) -> Dict[str, float]:
+        """
+        Calculate front/rear brake force distribution based on brake balance setting.
+        
+        Optimal brake balance changes with:
+        - Speed (aero load affects weight distribution)
+        - Fuel load (weight distribution)
+        - Tire condition
+        - Corner entry requirements
+        
+        Args:
+            total_brake_force: Total braking force in N
+            loads: Wheel loads from load transfer calculation
+        
+        Returns:
+            Dict with brake forces for front and rear axles
+        """
+        # Brake balance: 0 = all rear, 1 = all front
+        # Optimal is ~56-60% front for F1 at high speed
+        front_brake = total_brake_force * self.brake_balance
+        rear_brake = total_brake_force * (1.0 - self.brake_balance)
+        
+        # Calculate maximum available friction force per axle
+        # F_brake_max = μ * N (limited by tire grip)
+        friction_coeff = 1.4  # Racing tire peak
+        
+        front_load = loads['FL'] + loads['FR']
+        rear_load = loads['RL'] + loads['RR']
+        
+        max_front_brake = friction_coeff * front_load
+        max_rear_brake = friction_coeff * rear_load
+        
+        # Check for lock-up potential (RL optimization target)
+        front_lock_margin = (max_front_brake - front_brake) / max_front_brake
+        rear_lock_margin = (max_rear_brake - rear_brake) / max_rear_brake
+        
+        # Efficiency: closer to limit = better, but lock-up = very bad
+        # Optimal margin: 5-10%
+        if front_lock_margin < 0:  # Front locking
+            front_brake = max_front_brake * 0.95  # Limit to 95%
+            braking_efficiency = 0.7  # Heavy penalty
+        elif front_lock_margin < 0.05:
+            braking_efficiency = 1.0  # Perfect
+        else:
+            braking_efficiency = 0.9  # Underutilizing brakes
+        
+        if rear_lock_margin < 0:  # Rear locking (causes instability)
+            rear_brake = max_rear_brake * 0.95
+            braking_efficiency *= 0.6  # Severe penalty (spin risk)
+        elif rear_lock_margin < 0.05:
+            braking_efficiency *= 1.0
+        else:
+            braking_efficiency *= 0.95
+        
+        self.braking_efficiency = braking_efficiency
+        
+        # Update brake temperatures (affects fade)
+        # Higher brake force = more heat generation
+        heat_gen_front = front_brake / 10000.0  # Simplified
+        heat_gen_rear = rear_brake / 10000.0
+        
+        self.brake_temp_front = min(900.0, self.brake_temp_front + heat_gen_front)
+        self.brake_temp_rear = min(900.0, self.brake_temp_rear + heat_gen_rear)
+        
+        # Brake fade if too hot (>800°C)
+        if self.brake_temp_front > 800:
+            fade_factor = 1.0 - ((self.brake_temp_front - 800) / 200.0)
+            front_brake *= max(0.7, fade_factor)
+        if self.brake_temp_rear > 800:
+            fade_factor = 1.0 - ((self.brake_temp_rear - 800) / 200.0)
+            rear_brake *= max(0.7, fade_factor)
+        
+        return {
+            'front': front_brake,
+            'rear': rear_brake,
+            'efficiency': braking_efficiency,
+            'front_lock_margin': front_lock_margin,
+            'rear_lock_margin': rear_lock_margin,
+        }
 
     def _move(self):
         """Move with advanced physics: drag, downforce, slipstream, energy, tire wear."""
@@ -308,14 +582,61 @@ class RacingVehicle(MobilityAgent):
         # Drag reduces acceleration
         drag_deceleration = drag_force / self.mass
         
-        # Apply acceleration with drag
+        # Calculate current accelerations for load transfer
+        speed_diff = self.target_speed - self.speed
+        
+        # Estimate lateral acceleration from cornering
+        lateral_accel = 0.0
+        corner_radius = 0.0
+        if self.current_curvature > 0:
+            corner_radius = 1.0 / self.current_curvature
+            lateral_accel = (self.speed ** 2) / corner_radius if corner_radius > 0 else 0.0
+        
+        # Estimate longitudinal acceleration (simplified)
+        if speed_diff > 0:  # Accelerating
+            longitudinal_accel = self.acceleration - drag_deceleration
+        else:  # Braking
+            longitudinal_accel = -(self.braking_rate + drag_deceleration)
+        
+        # Calculate load transfer for brake balance and differential
+        wheel_loads = self._calculate_load_transfer(lateral_accel, longitudinal_accel)
+        
+        # Apply differential effect on acceleration (corner exit traction)
+        diff_efficiency = self._calculate_differential_effect(corner_radius, self.speed)
+        
+        # Apply acceleration with drag and differential effects
         if self.speed < self.target_speed:
-            net_acceleration = self.acceleration - drag_deceleration
+            # Accelerating - apply differential traction efficiency
+            net_acceleration = (self.acceleration * diff_efficiency) - drag_deceleration
             self.speed = min(self.speed + net_acceleration * time_step, self.target_speed)
+            
+            # Track corner exit quality for RL reward
+            if self.current_curvature > 0:
+                self.corner_exit_quality = diff_efficiency
+        
         elif self.speed > self.target_speed:
-            # Braking with drag assistance
-            net_braking = self.braking_rate + drag_deceleration
-            self.speed = max(self.speed - net_braking * time_step, self.target_speed)
+            # Braking - apply engine braking and brake balance
+            engine_brake_decel = self._calculate_engine_braking(speed_diff)
+            
+            # Calculate total required braking force
+            required_decel = abs(speed_diff) / time_step if time_step > 0 else self.braking_rate
+            required_decel = min(required_decel, self.braking_rate)
+            
+            # Brake force in Newtons
+            total_brake_force_needed = (required_decel - drag_deceleration - engine_brake_decel) * self.mass
+            total_brake_force_needed = max(0, total_brake_force_needed)
+            
+            # Distribute braking force based on brake balance
+            brake_dist = self._calculate_brake_distribution(total_brake_force_needed, wheel_loads)
+            
+            # Apply total deceleration
+            total_decel = drag_deceleration + engine_brake_decel + (brake_dist['front'] + brake_dist['rear']) / self.mass
+            
+            # Penalize if braking inefficiently (RL learning signal)
+            total_decel *= brake_dist['efficiency']
+            
+            self.speed = max(self.speed - total_decel * time_step, self.target_speed)
+        
         else:
             # Maintain speed, but drag still affects it
             self.speed = max(0, self.speed - drag_deceleration * time_step)
@@ -503,6 +824,112 @@ class RacingVehicle(MobilityAgent):
                 "lap_time_std": round(self.lap_time_std, 2),
                 "qualifying_position": self.qualifying_position,
                 "just_crossed_line": self.just_crossed_line,
+                # Advanced dynamics settings (RL adjustable)
+                "differential_preload": round(self.differential_preload, 1),
+                "engine_braking": round(self.engine_braking, 2),
+                "brake_balance": round(self.brake_balance, 2),
+                # Brake temperatures
+                "brake_temp_front": round(self.brake_temp_front, 1),
+                "brake_temp_rear": round(self.brake_temp_rear, 1),
+                # RL metrics (reward/loss signals)
+                "traction_efficiency": round(self.traction_efficiency, 3),
+                "braking_efficiency": round(self.braking_efficiency, 3),
+                "corner_exit_quality": round(self.corner_exit_quality, 3),
+                "lateral_load_transfer": round(self.lateral_load_transfer, 1),
+                "longitudinal_load_transfer": round(self.longitudinal_load_transfer, 1),
             }
         )
         return state
+    
+    def adjust_differential(self, delta: float):
+        """
+        Adjust differential preload setting.
+        For RL agent control - can be called per corner or per lap.
+        
+        Args:
+            delta: Change in preload (-10 to +10 Nm typical per adjustment)
+        """
+        self.differential_preload = max(0.0, min(100.0, self.differential_preload + delta))
+    
+    def adjust_engine_braking(self, delta: float):
+        """
+        Adjust engine braking setting.
+        For RL agent control.
+        
+        Args:
+            delta: Change in engine braking (-0.1 to +0.1 typical)
+        """
+        self.engine_braking = max(0.0, min(1.0, self.engine_braking + delta))
+    
+    def adjust_brake_balance(self, delta: float):
+        """
+        Adjust brake balance setting.
+        For RL agent control - critical for corner entry optimization.
+        
+        Args:
+            delta: Change in brake balance (-0.02 to +0.02 typical, 2% shifts)
+        """
+        self.brake_balance = max(0.0, min(1.0, self.brake_balance + delta))
+    
+    def get_rl_state_vector(self) -> list:
+        """
+        Get state vector for RL training.
+        Normalized values suitable for neural network input.
+        
+        Returns:
+            List of normalized state values
+        """
+        return [
+            self.speed / self.max_speed,  # Normalized speed
+            self.tire_wear / 100.0,  # Normalized wear
+            (self.tire_temperature - 60) / 60.0,  # Normalized temp (60-120°C range)
+            self.energy / 100.0,  # Normalized energy
+            self.current_curvature,  # Track curvature (already small)
+            self.differential_preload / 100.0,  # Normalized diff setting
+            self.engine_braking,  # Already 0-1
+            self.brake_balance,  # Already 0-1
+            self.traction_efficiency,  # 0-1
+            self.braking_efficiency,  # 0-1
+            (self.brake_temp_front - 400) / 500.0,  # Normalized brake temp
+            (self.brake_temp_rear - 400) / 500.0,  # Normalized brake temp
+            self.damage_level / 100.0,  # Normalized damage
+        ]
+    
+    def get_rl_reward(self) -> float:
+        """
+        Calculate reward for RL training.
+        
+        Reward components:
+        - Lap time improvement (primary)
+        - Efficiency metrics (secondary)
+        - Penalties for mistakes
+        
+        Returns:
+            Scalar reward value
+        """
+        reward = 0.0
+        
+        # Primary: Speed/progress reward
+        reward += self.speed / self.max_speed * 10.0
+        
+        # Traction efficiency (corner exit)
+        reward += self.traction_efficiency * 2.0
+        
+        # Braking efficiency
+        reward += self.braking_efficiency * 2.0
+        
+        # Penalties
+        if self.tire_wear > 80:
+            reward -= 2.0  # Heavy tire wear penalty
+        
+        if self.brake_temp_front > 850 or self.brake_temp_rear > 850:
+            reward -= 3.0  # Brake overheating penalty
+        
+        if self.damage_level > 50:
+            reward -= 5.0  # Damage penalty
+        
+        # Energy management
+        if self.energy < 10:
+            reward -= 5.0  # Running out of energy
+        
+        return reward
