@@ -14,3 +14,8 @@ dependencies = [
     "solara>=1.54.0",
     "uvicorn>=0.38.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.4.0",
+]

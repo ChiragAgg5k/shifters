@@ -197,14 +197,20 @@ The system includes several pre-configured scenarios:
 ## Development
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
+# Install dependencies
+uv sync
+
+# Install pre-commit hooks (required for all contributors)
+uv run pre-commit install
 
 # Run tests (when available)
 uv run pytest
 
-# Format code
+# Format code manually
 uv run black shifters/
+
+# Run pre-commit hooks on all files
+uv run pre-commit run --all-files
 
 # Type checking
 uv run mypy shifters/
@@ -219,6 +225,16 @@ This is a foundational implementation designed for extension. Key areas for cont
 3. Visualization components
 4. Performance optimizations
 5. Event types and rules
+
+### Setting Up for Development
+
+Before making any commits, install the pre-commit hooks:
+
+```bash
+uv run pre-commit install
+```
+
+This ensures code is automatically formatted with Black and passes basic checks before each commit. All PRs must pass these checks.
 
 ## License
 
