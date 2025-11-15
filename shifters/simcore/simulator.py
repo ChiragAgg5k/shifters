@@ -7,6 +7,7 @@ import time
 
 from shifters.agents.base_agent import MobilityAgent
 from shifters.environment.track import Track, Environment
+from shifters.environment.safety_car import SafetyCar, DNFManager
 from shifters.leaderboard.leaderboard import Leaderboard
 
 
@@ -34,11 +35,14 @@ class MobilitySimulation(Model):
         self.agent_set = AgentSet([], random=self.random)
         self.environment = Environment(track)
         self.leaderboard = Leaderboard()
+        self.safety_car = SafetyCar(track_name=track.name)
+        self.dnf_manager = DNFManager()
 
         # Simulation settings
         self.time_step = time_step
         self.enable_live_updates = enable_live_updates
         self.current_step = 0
+        self.current_lap = 0
         self.simulation_time = 0.0
         self.running = True
         self.race_started = False
@@ -110,6 +114,21 @@ class MobilitySimulation(Model):
         # Update environment
         self.environment.update(self.time_step)
 
+        # Check slipstream and DRS for racing vehicles
+        from shifters.agents.base_agent import RacingVehicle
+        racing_agents = [a for a in self.agents_list if isinstance(a, RacingVehicle)]
+        
+        for agent in racing_agents:
+            if not agent.finished:
+                # Check slipstream effect
+                agent.check_slipstream(racing_agents)
+                
+                # Auto-manage DRS (activate on straights, deactivate in corners)
+                if agent.current_curvature == 0 and agent.speed > agent.max_speed * 0.7:
+                    agent.activate_drs()
+                else:
+                    agent.deactivate_drs()
+
         # Update all agents
         self.agent_set.do("step")
 
@@ -117,11 +136,44 @@ class MobilitySimulation(Model):
         self.simulation_time += self.time_step
         self.current_step += 1
 
-        # Process agent states
+        # Process agent states and check for DNFs
+        from shifters.agents.base_agent import RacingVehicle
+        dnf_occurred = False
+        
+        # Update current lap to the leading car's lap
+        if self.agents_list:
+            self.current_lap = max(agent.lap for agent in self.agents_list if not agent.finished) if any(not agent.finished for agent in self.agents_list) else 0
+        
         for agent in self.agents_list:
             if not agent.finished:
                 agent.total_time = self.simulation_time
+                
+                # Check for DNF (only for RacingVehicles, once per lap, after lap 1)
+                if isinstance(agent, RacingVehicle) and agent.lap > 0:
+                    # Only check once per lap
+                    if agent.last_dnf_check_lap < agent.lap:
+                        agent.last_dnf_check_lap = agent.lap
+                        dnf, reason = self.dnf_manager.check_dnf(
+                            agent.dnf_probability,
+                            0.02,  # 2% mechanical failure rate
+                            agent.lap,  # Use agent's current lap, not global
+                            self.environment.track.num_laps
+                        )
+                        if dnf:
+                            agent.finish_race()
+                            self.finished_agents.append(agent)
+                            self.dnf_manager.record_dnf(agent.unique_id, agent.lap, reason)
+                            dnf_occurred = True
+                            continue
+                
                 self._check_agent_progress(agent)
+        
+        # Check for safety car deployment
+        if dnf_occurred:
+            self.safety_car.check_deployment(dnf_occurred=True)
+        
+        # Update safety car state
+        self.safety_car.update(self.current_lap)
 
         # Update leaderboard
         if self.enable_live_updates:
@@ -235,10 +287,13 @@ class MobilitySimulation(Model):
         return {
             "time": round(self.simulation_time, 2),
             "step": self.current_step,
+            "lap": self.current_lap,
             "running": self.running,
             "race_started": self.race_started,
             "race_finished": self.race_finished,
             "environment": self.environment.get_state(),
             "agents": [agent.get_state() for agent in self.agents_list],
             "standings": self.get_current_standings(),
+            "safety_car": self.safety_car.get_state(),
+            "dnfs": self.dnf_manager.get_state(),
         }

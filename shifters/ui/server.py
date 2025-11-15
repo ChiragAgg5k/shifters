@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any
 import asyncio
 import json
@@ -11,6 +12,15 @@ from shifters import MobilitySimulation, Track, RacingVehicle, GeoJSONTrackParse
 
 
 app = FastAPI(title="Shifters Visualization Server")
+
+# Add CORS middleware to allow requests from frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000", "http://127.0.0.1:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Store active simulations
 websocket_clients: List[WebSocket] = []
@@ -71,8 +81,12 @@ class SimulationManager:
                     num_laps=config.get("num_laps", 3),
                 )
                 print(f"Loaded F1 circuit: {track.name}")
+                print(f"Track has geometry: {track.get_info().get('has_geometry')}")
+                print(f"Number of segments: {len(track.segments)}")
             except Exception as e:
                 print(f"Error loading F1 circuit {circuit_id}: {e}")
+                import traceback
+                traceback.print_exc()
                 # Fallback to custom track
                 track = Track(
                     length=config.get("track_length", 1000.0),
@@ -140,17 +154,21 @@ class SimulationManager:
         self.running = True
 
         # Run simulation loop with broadcasts
+        # Sync rendering with physics: time_step = 0.1s = 100ms
+        time_step = self.simulation.time_step
+        
         while self.running and self.simulation.running:
+            # Step physics
             self.simulation.step()
 
             # Get current state
             state = self.simulation.get_simulation_state()
 
-            # Broadcast to clients
+            # Broadcast to clients immediately
             await self.broadcast_state(state)
 
-            # Small delay for real-time viewing (50ms = 20 updates/sec)
-            await asyncio.sleep(0.05)
+            # Sleep for exactly the physics time step (perfect sync)
+            await asyncio.sleep(time_step)
 
         # Send final state
         if self.simulation:

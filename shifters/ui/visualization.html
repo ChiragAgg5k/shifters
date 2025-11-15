@@ -13,32 +13,30 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
-            color: #fff;
+            background: #050509;
+            color: #f5f5f7;
             overflow-x: hidden;
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1200px; /* Narrower for a cleaner look */
             margin: 0 auto;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
         header {
             text-align: center;
-            padding: 20px 0;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            margin-bottom: 20px;
         }
 
         h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #ff3030;
         }
 
         .status {
@@ -50,9 +48,9 @@
             margin-top: 10px;
         }
 
-        .status.waiting { background: #ffa500; }
-        .status.racing { background: #4caf50; animation: pulse 1.5s infinite; }
-        .status.finished { background: #2196f3; }
+        .status.waiting { background: #f97316; }
+        .status.racing { background: #ef4444; animation: pulse 1.5s infinite; }
+        .status.finished { background: #6b7280; }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -76,36 +74,40 @@
             cursor: pointer;
             font-weight: bold;
             transition: all 0.3s;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #ef4444;
+            color: #f9fafb;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
         }
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
         }
 
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+            background: #4b5563; /* Muted background for disabled */
+            box-shadow: none;
         }
 
-        .main-content {
+        .data-grid {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 20px;
-            margin-top: 20px;
         }
 
         @media (max-width: 1024px) {
-            .main-content {
+            .data-grid {
                 grid-template-columns: 1fr;
             }
         }
 
         .track-container {
-            background: rgba(0, 0, 0, 0.3);
+            background: radial-gradient(circle at top, rgba(248, 113, 113, 0.12), transparent 55%),
+                        rgba(10, 10, 16, 0.95);
             border-radius: 10px;
             padding: 20px;
             position: relative;
@@ -114,14 +116,14 @@
         #trackCanvas {
             width: 100%;
             border-radius: 10px;
-            background: #1a1a2e;
+            background: #050712;
             display: block;
         }
 
         .track-info {
             margin-top: 15px;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(15, 23, 42, 0.95);
             border-radius: 8px;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -134,24 +136,19 @@
 
         .info-label {
             font-size: 0.8em;
-            color: #aaa;
+            color: #9ca3af;
             margin-bottom: 5px;
         }
 
         .info-value {
             font-size: 1.3em;
             font-weight: bold;
-            color: #667eea;
+            color: #f97373;
         }
 
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
 
         .leaderboard {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(10, 10, 16, 0.95);
             border-radius: 10px;
             padding: 20px;
         }
@@ -167,7 +164,7 @@
             grid-template-columns: 50px 1fr 80px 80px;
             padding: 10px;
             font-weight: bold;
-            color: #aaa;
+            color: #9ca3af;
             font-size: 0.9em;
             border-bottom: 2px solid rgba(255, 255, 255, 0.1);
         }
@@ -177,14 +174,14 @@
             grid-template-columns: 50px 1fr 80px 80px;
             padding: 12px 10px;
             margin: 5px 0;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(15, 23, 42, 0.95);
             border-radius: 8px;
             transition: all 0.3s;
             border-left: 4px solid transparent;
         }
 
         .leaderboard-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(248, 113, 113, 0.15);
             transform: translateX(5px);
         }
 
@@ -207,7 +204,7 @@
         }
 
         .stats {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(10, 10, 16, 0.95);
             border-radius: 10px;
             padding: 20px;
         }
@@ -225,12 +222,12 @@
         }
 
         .stat-label {
-            color: #aaa;
+            color: #9ca3af;
         }
 
         .stat-value {
             font-weight: bold;
-            color: #667eea;
+            color: #f97373;
         }
 
         .connection-status {
@@ -267,16 +264,18 @@
             50% { opacity: 0.3; }
         }
 
-        .config-section {
-            background: rgba(0, 0, 0, 0.3);
+        .control-deck {
+            background: rgba(10, 10, 16, 0.95);
             border-radius: 10px;
             padding: 20px;
-            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
         .config-section h3 {
             margin-bottom: 15px;
-            color: #667eea;
+            color: #f97373;
         }
 
         .config-grid {
@@ -293,7 +292,7 @@
 
         .config-item label {
             font-size: 0.9em;
-            color: #aaa;
+            color: #9ca3af;
         }
 
         .config-item input,
@@ -301,8 +300,8 @@
             padding: 8px 12px;
             border-radius: 5px;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
+            background: rgba(15, 23, 42, 0.95);
+            color: #f9fafb;
             font-size: 1em;
         }
     </style>
@@ -312,11 +311,9 @@
         <header>
             <h1>🏎️ Shifters Racing Simulator</h1>
             <p>Real-time Competitive Mobility Systems Visualization</p>
-            <div id="statusBadge" class="status waiting">⏸️ WAITING TO START</div>
         </header>
 
-        <div class="config-section">
-            <h3>⚙️ Race Configuration</h3>
+        <div class="control-deck">
             <div class="config-grid">
                 <div class="config-item">
                     <label>Number of Agents</label>
@@ -336,68 +333,66 @@
                     <input type="text" id="trackName" value="Custom Circuit" readonly>
                 </div>
             </div>
+            <div class="controls">
+                <button id="startBtn" onclick="startRace()">▶️ Start Race</button>
+                <button id="stopBtn" onclick="stopRace()" disabled>⏹️ Stop Race</button>
+                <button id="resetBtn" onclick="resetView()">🔄 Reset View</button>
+                <div id="statusBadge" class="status waiting">⏸️ WAITING TO START</div>
+            </div>
         </div>
 
-        <div class="controls">
-            <button id="startBtn" onclick="startRace()">▶️ Start Race</button>
-            <button id="stopBtn" onclick="stopRace()" disabled>⏹️ Stop Race</button>
-            <button id="resetBtn" onclick="resetView()">🔄 Reset View</button>
-        </div>
-
-        <div class="main-content">
-            <div class="track-container">
-                <canvas id="trackCanvas" width="800" height="600"></canvas>
-                <div class="track-info">
-                    <div class="info-item">
-                        <div class="info-label">Simulation Time</div>
-                        <div class="info-value" id="simTime">0.0s</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Current Step</div>
-                        <div class="info-value" id="simStep">0</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Active Agents</div>
-                        <div class="info-value" id="activeAgents">0</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Finished</div>
-                        <div class="info-value" id="finishedAgents">0</div>
-                    </div>
+        <div class="track-container">
+            <canvas id="trackCanvas" width="800" height="600"></canvas>
+            <div class="track-info">
+                <div class="info-item">
+                    <div class="info-label">Simulation Time</div>
+                    <div class="info-value" id="simTime">0.0s</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Current Step</div>
+                    <div class="info-value" id="simStep">0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Active Agents</div>
+                    <div class="info-value" id="activeAgents">0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Finished</div>
+                    <div class="info-value" id="finishedAgents">0</div>
                 </div>
             </div>
+        </div>
 
-            <div class="sidebar">
-                <div class="leaderboard">
-                    <h2>🏁 Live Leaderboard</h2>
-                    <div class="leaderboard-header">
-                        <div>Rank</div>
-                        <div>Agent</div>
-                        <div>Lap</div>
-                        <div>Progress</div>
-                    </div>
-                    <div id="leaderboardList"></div>
+        <div class="data-grid">
+            <div class="leaderboard">
+                <h2>🏁 Live Leaderboard</h2>
+                <div class="leaderboard-header">
+                    <div>Rank</div>
+                    <div>Agent</div>
+                    <div>Lap</div>
+                    <div>Progress</div>
                 </div>
+                <div id="leaderboardList"></div>
+            </div>
 
-                <div class="stats">
-                    <h2>📊 Race Statistics</h2>
-                    <div id="statsList">
-                        <div class="stat-row">
-                            <span class="stat-label">Track Length</span>
-                            <span class="stat-value" id="trackLengthStat">-</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Total Distance</span>
-                            <span class="stat-value" id="totalDistanceStat">-</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Leader Lap Time</span>
-                            <span class="stat-value" id="bestLapTime">-</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Leader Speed</span>
-                            <span class="stat-value" id="leaderSpeed">-</span>
-                        </div>
+            <div class="stats">
+                <h2>📊 Race Statistics</h2>
+                <div id="statsList">
+                    <div class="stat-row">
+                        <span class="stat-label">Track Length</span>
+                        <span class="stat-value" id="trackLengthStat">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Total Distance</span>
+                        <span class="stat-value" id="totalDistanceStat">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Leader Lap Time</span>
+                        <span class="stat-value" id="bestLapTime">-</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Leader Speed</span>
+                        <span class="stat-value" id="leaderSpeed">-</span>
                     </div>
                 </div>
             </div>
@@ -418,9 +413,9 @@
 
         // Agent colors
         const agentColors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
-            '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80',
-            '#EC7063', '#5DADE2', '#F4D03F', '#AF7AC5', '#48C9B0'
+            '#f97373', '#ef4444', '#dc2626', '#fb923c', '#facc15',
+            '#fda4af', '#fecaca', '#f97316', '#ea580c', '#991b1b',
+            '#b91c1c', '#fbbf24', '#fee2e2', '#7f1d1d', '#f87171'
         ];
 
         // Connect to WebSocket
