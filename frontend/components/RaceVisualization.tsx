@@ -14,7 +14,6 @@ const AGENT_COLORS = [
 
 export function RaceVisualization({ raceState }: RaceVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const prevPositionsRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     if (!canvasRef.current || !raceState) return
@@ -31,26 +30,23 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
 
     const track = raceState.environment.track
     const trackLength = track.length
-    
-    // Store previous positions for smooth interpolation
-    const prevPositions = prevPositionsRef.current
 
     // Debug logging
     if (raceState.step === 0 || raceState.step % 100 === 0) {
       console.log('Track data:', {
         name: track.name,
-        has_geometry: track.has_geometry,
+        hasGeometry: track.hasGeometry,
         coordinates_exists: !!track.coordinates,
         coordinates_length: track.coordinates?.length || 0,
-        track_type: track.track_type,
+        trackType: track.trackType,
       })
     }
 
     // Draw track based on geometry
-    if (track.has_geometry && track.coordinates && Array.isArray(track.coordinates) && track.coordinates.length > 0) {
-      drawGeoJSONTrack(ctx, canvas, track, raceState.agents, prevPositions)
+    if (track.hasGeometry && track.coordinates && Array.isArray(track.coordinates) && track.coordinates.length > 0) {
+      drawGeoJSONTrack(ctx, canvas, track, raceState.agents)
     } else {
-      drawCircularTrack(ctx, canvas, trackLength, raceState.agents, prevPositions)
+      drawCircularTrack(ctx, canvas, trackLength, raceState.agents)
     }
   }, [raceState])
 
@@ -58,8 +54,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     trackLength: number,
-    agents: any[],
-    prevPositions: Map<string, number>
+    agents: any[]
   ) => {
     const centerX = canvas.width / 2
     const centerY = canvas.height / 2
@@ -93,23 +88,12 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     ctx.lineTo(startX + 30, startY)
     ctx.stroke()
 
-    // Draw agents with smooth lap completion handling
+    // Draw agents - skip if just crossed finish line to prevent visual jump
     agents.forEach((agent, index) => {
-      const agentId = agent.id
-      const currentPos = agent.position
-      const prevPos = prevPositions.get(agentId) ?? currentPos
+      // Skip this agent if it just crossed the finish line
+      if (agent.just_crossed_line) return
       
-      // Detect lap completion: position decreased significantly
-      let renderPos = currentPos
-      if (prevPos > trackLength * 0.9 && currentPos < trackLength * 0.1) {
-        // Just crossed finish line - use previous position for smooth visual
-        renderPos = prevPos
-      }
-      
-      // Update stored position
-      prevPositions.set(agentId, currentPos)
-      
-      const progress = renderPos / trackLength
+      const progress = agent.position / trackLength
       const angle = startAngle + progress * 2 * Math.PI
       const x = centerX + radius * Math.cos(angle)
       const y = centerY + radius * Math.sin(angle)
@@ -121,8 +105,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     track: any,
-    agents: any[],
-    prevPositions: Map<string, number>
+    agents: any[]
   ) => {
     const coords = track.coordinates
 
@@ -204,23 +187,12 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
       ctx.stroke()
     }
 
-    // Draw agents with smooth lap completion handling
+    // Draw agents - skip if just crossed finish line to prevent visual jump
     agents.forEach((agent, index) => {
-      const agentId = agent.id
-      const currentPos = agent.position
-      const prevPos = prevPositions.get(agentId) ?? currentPos
+      // Skip this agent if it just crossed the finish line
+      if (agent.just_crossed_line) return
       
-      // Detect lap completion: position decreased significantly
-      let renderPos = currentPos
-      if (prevPos > track.length * 0.9 && currentPos < track.length * 0.1) {
-        // Just crossed finish line - use previous position for smooth visual
-        renderPos = prevPos
-      }
-      
-      // Update stored position
-      prevPositions.set(agentId, currentPos)
-      
-      const progress = renderPos / track.length
+      const progress = agent.position / track.length
       const distances = [0]
       for (let i = 1; i < coords.length; i++) {
         const dx = coords[i].x - coords[i - 1].x

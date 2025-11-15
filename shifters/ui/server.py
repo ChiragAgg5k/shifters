@@ -110,10 +110,25 @@ class SimulationManager:
                 f"checkpoint_{i}", track.length * (i / num_checkpoints), f"Sector {i}"
             )
 
-        # Create simulation
+        # Create simulation with weather configuration
         self.simulation = MobilitySimulation(
             track=track, time_step=config.get("time_step", 0.1)
         )
+        
+        # Set weather conditions
+        track_temp = config.get("track_temperature", 35.0)
+        rain_prob = config.get("rain_probability", 0.0)
+        
+        # Determine weather based on rain probability
+        import random
+        weather = "rain" if random.random() < rain_prob else "clear"
+        
+        # Set environment conditions
+        self.simulation.environment.temperature = track_temp
+        self.simulation.environment.weather = weather
+        
+        print(f"🌡️  Track Temperature: {track_temp}°C")
+        print(f"🌧️  Weather: {weather} (rain probability: {rain_prob*100:.0f}%)")
 
         # Add agents
         num_agents = config.get("num_agents", 5)

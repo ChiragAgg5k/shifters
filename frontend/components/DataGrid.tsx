@@ -12,7 +12,7 @@ export function DataGrid({ raceState }: DataGridProps) {
   // Calculate progress for each agent
   const agentsWithProgress = agents.map((agent: any) => {
     const trackLength = track?.length || 1
-    const totalDistance = trackLength * (track?.num_laps || 1)
+    const totalDistance = trackLength * (track?.numLaps || 1)
     const currentDistance = (agent.lap * trackLength) + (agent.position || 0)
     const progress = (currentDistance / totalDistance) * 100
     return { ...agent, progress }
@@ -33,11 +33,24 @@ export function DataGrid({ raceState }: DataGridProps) {
     return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}.${ms.toString().padStart(2, '0')}s`
   }
 
+  const weather = raceState?.environment?.weather || 'clear'
+  const temperature = raceState?.environment?.temperature || 25
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Leaderboard */}
       <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-xl font-bold text-primary mb-4">🏁 Live Leaderboard</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-primary">🏁 Live Leaderboard</h2>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">
+              {weather === 'rain' ? '🌧️ Rain' : '☀️ Clear'}
+            </span>
+            <span className="text-muted-foreground">
+              🌡️ {temperature}°C
+            </span>
+          </div>
+        </div>
         <div className="space-y-2">
           <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
             <div className="col-span-1">Rank</div>
