@@ -136,6 +136,9 @@ class MobilityAgent(Agent):
 
     def get_state(self) -> Dict[str, Any]:
         """Get current agent state for display/logging."""
+        # Calculate best lap time if any laps completed
+        best_lap = min(self.lap_times) if self.lap_times else None
+
         state = {
             "id": self.unique_id,
             "name": self.name,
@@ -147,6 +150,8 @@ class MobilityAgent(Agent):
             "distance_traveled": round(self.distance_traveled, 2),
             "total_time": round(self.total_time, 2),
             "checkpoints": len(self.checkpoints_passed),
+            "lap_times": self.lap_times,
+            "best_lap_time": round(best_lap, 2) if best_lap else None,
         }
 
         # Add 3D position if available

@@ -549,6 +549,11 @@
         function updateVisualization(state) {
             if (!state) return;
 
+            // Debug: Log agent states occasionally
+            if (state.step % 50 === 0 && state.agents && state.agents.length > 0) {
+                console.log('Sample agent state:', state.agents[0]);
+            }
+
             // Update status badge
             if (state.race_finished || state.race_complete) {
                 document.getElementById('statusBadge').className = 'status finished';
@@ -590,9 +595,10 @@
                 }
 
                 // Update best lap time
-                if (leaderAgent && leaderAgent.best_lap_time !== undefined && leaderAgent.best_lap_time > 0) {
+                if (leaderAgent && leaderAgent.best_lap_time !== undefined && leaderAgent.best_lap_time !== null) {
+                    console.log('Leader best lap time:', leaderAgent.best_lap_time, 'Lap times:', leaderAgent.lap_times);
                     document.getElementById('bestLapTime').textContent = formatTime(leaderAgent.best_lap_time);
-                } else if (leader.best_lap_time !== undefined && leader.best_lap_time > 0) {
+                } else if (leader.best_lap_time !== undefined && leader.best_lap_time !== null) {
                     document.getElementById('bestLapTime').textContent = formatTime(leader.best_lap_time);
                 } else {
                     document.getElementById('bestLapTime').textContent = '-';
