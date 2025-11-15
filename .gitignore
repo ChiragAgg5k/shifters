@@ -50,6 +50,6 @@ htmlcov/
 # Data files
 
 *.csv
-*.json
+# *.json
 !pyproject.toml
 !uv.lock
