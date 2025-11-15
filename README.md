@@ -16,9 +16,11 @@ A lightweight mobility event simulator that models many moving agents, events, a
 - **Agent-Based Modeling**: Each agent (vehicle, drone, etc.) has independent properties and decision logic
 - **Discrete Event Simulation**: Efficient state changes over time
 - **Live Leaderboard**: Real-time ranking updates with efficient sorted data structures
+- **Web-Based Visualization**: Real-time race visualization with WebSocket updates
 - **Flexible Environments**: Customizable tracks and scenarios
 - **Event System**: Trigger callbacks for laps, checkpoints, finishes, etc.
 - **Pre-configured Scenarios**: Formula E, MotoGP, drones, supply chain, and traffic flow
+- **Dual UI Options**: Custom WebSocket UI or Mesa-native Solara interface
 
 ## Project Structure
 
@@ -28,7 +30,7 @@ shifters/
 ├── environment/     # Track and environment representation
 ├── simcore/         # Simulation engine and event loop
 ├── leaderboard/     # Real-time ranking system
-├── ui/              # Dashboard and visualization (future)
+├── ui/              # Web visualization (FastAPI + WebSocket + Mesa/Solara)
 ├── config/          # Scenario configurations
 └── cli.py           # Command-line interface
 ```
@@ -44,7 +46,17 @@ uv sync
 
 ## Quick Start
 
-Run a sample racing simulation:
+### Option 1: Web Visualization (Recommended)
+
+```bash
+# Start the web visualization server
+uv run python run_visualization.py
+
+# Then open your browser to: http://localhost:8000
+# Configure race parameters in the UI and click "Start Race"
+```
+
+### Option 2: Command Line
 
 ```bash
 # Basic race with 5 agents
@@ -56,6 +68,17 @@ uv run python -m shifters.cli -n 10 --laps 5 --track-length 2000
 # Run without live leaderboard updates
 uv run python -m shifters.cli --no-leaderboard
 ```
+
+### Option 3: Mesa-Native Visualization
+
+```bash
+# Use Mesa's Solara interface
+uv run python run_visualization.py --mesa
+
+# Opens at: http://localhost:8765
+```
+
+📖 **See [UI_GUIDE.md](UI_GUIDE.md) for complete visualization documentation**
 
 ### CLI Options
 

@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shifters - Live Race Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .status.waiting { background: #ffa500; }
+        .status.racing { background: #4caf50; animation: pulse 1.5s infinite; }
+        .status.finished { background: #2196f3; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1em;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .track-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+        }
+
+        #trackCanvas {
+            width: 100%;
+            border-radius: 10px;
+            background: #1a1a2e;
+            display: block;
+        }
+
+        .track-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .info-item {
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: 0.8em;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .leaderboard {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .leaderboard h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            text-align: center;
+        }
+
+        .leaderboard-header {
+            display: grid;
+            grid-template-columns: 50px 1fr 80px 80px;
+            padding: 10px;
+            font-weight: bold;
+            color: #aaa;
+            font-size: 0.9em;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .leaderboard-item {
+            display: grid;
+            grid-template-columns: 50px 1fr 80px 80px;
+            padding: 12px 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+
+        .leaderboard-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .leaderboard-item.first { border-left-color: #ffd700; }
+        .leaderboard-item.second { border-left-color: #c0c0c0; }
+        .leaderboard-item.third { border-left-color: #cd7f32; }
+
+        .rank {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .agent-name {
+            font-weight: 500;
+        }
+
+        .finished {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        .stats {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .stats h2 {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            color: #aaa;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.connected {
+            background: #4caf50;
+        }
+
+        .connection-status.disconnected {
+            background: #f44336;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: white;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .config-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .config-section h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .config-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .config-item label {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+
+        .config-item input,
+        .config-item select {
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏎️ Shifters Racing Simulator</h1>
+            <p>Real-time Competitive Mobility Systems Visualization</p>
+            <div id="statusBadge" class="status waiting">⏸️ WAITING TO START</div>
+        </header>
+
+        <div class="config-section">
+            <h3>⚙️ Race Configuration</h3>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Number of Agents</label>
+                    <input type="number" id="numAgents" value="5" min="2" max="20">
+                </div>
+                <div class="config-item">
+                    <label>Track Length (m)</label>
+                    <input type="number" id="trackLength" value="1000" min="500" max="5000" step="100">
+                </div>
+                <div class="config-item">
+                    <label>Number of Laps</label>
+                    <input type="number" id="numLaps" value="3" min="1" max="10">
+                </div>
+                <div class="config-item">
+                    <label>Track Name</label>
+                    <input type="text" id="trackName" value="Monaco Street Circuit">
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" onclick="startRace()">▶️ Start Race</button>
+            <button id="stopBtn" onclick="stopRace()" disabled>⏹️ Stop Race</button>
+            <button id="resetBtn" onclick="resetView()">🔄 Reset View</button>
+        </div>
+
+        <div class="main-content">
+            <div class="track-container">
+                <canvas id="trackCanvas" width="800" height="600"></canvas>
+                <div class="track-info">
+                    <div class="info-item">
+                        <div class="info-label">Simulation Time</div>
+                        <div class="info-value" id="simTime">0.0s</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Current Step</div>
+                        <div class="info-value" id="simStep">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Active Agents</div>
+                        <div class="info-value" id="activeAgents">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Finished</div>
+                        <div class="info-value" id="finishedAgents">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="leaderboard">
+                    <h2>🏁 Live Leaderboard</h2>
+                    <div class="leaderboard-header">
+                        <div>Rank</div>
+                        <div>Agent</div>
+                        <div>Lap</div>
+                        <div>Progress</div>
+                    </div>
+                    <div id="leaderboardList"></div>
+                </div>
+
+                <div class="stats">
+                    <h2>📊 Race Statistics</h2>
+                    <div id="statsList">
+                        <div class="stat-row">
+                            <span class="stat-label">Track Length</span>
+                            <span class="stat-value" id="trackLengthStat">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Distance</span>
+                            <span class="stat-value" id="totalDistanceStat">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Leader Lap Time</span>
+                            <span class="stat-value" id="bestLapTime">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="connectionStatus" class="connection-status disconnected">
+        <span class="dot"></span>
+        <span id="connectionText">DISCONNECTED</span>
+    </div>
+
+    <script>
+        let ws = null;
+        let canvas = document.getElementById('trackCanvas');
+        let ctx = canvas.getContext('2d');
+        let currentState = null;
+        let raceActive = false;
+
+        // Agent colors
+        const agentColors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+            '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80',
+            '#EC7063', '#5DADE2', '#F4D03F', '#AF7AC5', '#48C9B0'
+        ];
+
+        // Connect to WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateConnectionStatus(true);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                currentState = data;
+                updateVisualization(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus(false);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus(false);
+                // Attempt to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+
+            if (connected) {
+                status.className = 'connection-status connected';
+                text.textContent = 'CONNECTED';
+            } else {
+                status.className = 'connection-status disconnected';
+                text.textContent = 'DISCONNECTED';
+            }
+        }
+
+        async function startRace() {
+            const config = {
+                num_agents: parseInt(document.getElementById('numAgents').value),
+                track_length: parseFloat(document.getElementById('trackLength').value),
+                num_laps: parseInt(document.getElementById('numLaps').value),
+                track_name: document.getElementById('trackName').value
+            };
+
+            try {
+                const response = await fetch('/api/simulation/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+                console.log('Race started:', result);
+
+                raceActive = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('statusBadge').className = 'status racing';
+                document.getElementById('statusBadge').textContent = '🏁 RACING';
+            } catch (error) {
+                console.error('Error starting race:', error);
+                alert('Failed to start race. Is the server running?');
+            }
+        }
+
+        async function stopRace() {
+            try {
+                const response = await fetch('/api/simulation/stop', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                console.log('Race stopped:', result);
+
+                raceActive = false;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('statusBadge').className = 'status finished';
+                document.getElementById('statusBadge').textContent = '🏆 FINISHED';
+            } catch (error) {
+                console.error('Error stopping race:', error);
+            }
+        }
+
+        function resetView() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('leaderboardList').innerHTML = '';
+            currentState = null;
+        }
+
+        function updateVisualization(state) {
+            if (!state) return;
+
+            // Update status badge
+            if (state.race_finished || state.race_complete) {
+                document.getElementById('statusBadge').className = 'status finished';
+                document.getElementById('statusBadge').textContent = '🏆 RACE FINISHED';
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+
+            // Update info boxes
+            document.getElementById('simTime').textContent = `${state.time}s`;
+            document.getElementById('simStep').textContent = state.step || 0;
+
+            const activeCount = state.agents ? state.agents.filter(a => !a.finished).length : 0;
+            const finishedCount = state.agents ? state.agents.filter(a => a.finished).length : 0;
+
+            document.getElementById('activeAgents').textContent = activeCount;
+            document.getElementById('finishedAgents').textContent = finishedCount;
+
+            // Update stats
+            if (state.environment && state.environment.track) {
+                const track = state.environment.track;
+                document.getElementById('trackLengthStat').textContent = `${track.length}m`;
+                document.getElementById('totalDistanceStat').textContent = `${track.total_distance}m`;
+            }
+
+            // Draw track
+            drawTrack(state);
+
+            // Update leaderboard
+            updateLeaderboard(state.standings || []);
+        }
+
+        function drawTrack(state) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (!state.environment || !state.agents) return;
+
+            const trackLength = state.environment.track.length;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(canvas.width, canvas.height) / 2 - 80;
+
+            // Draw track (circular)
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 60;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw track center line
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw start/finish line
+            const startAngle = -Math.PI / 2;
+            const startX = centerX + radius * Math.cos(startAngle);
+            const startY = centerY + radius * Math.sin(startAngle);
+
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(startX - 30, startY);
+            ctx.lineTo(startX + 30, startY);
+            ctx.stroke();
+
+            // Draw agents
+            state.agents.forEach((agent, index) => {
+                const progress = agent.position / trackLength;
+                const angle = startAngle + (progress * 2 * Math.PI);
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                // Agent circle
+                const color = agentColors[index % agentColors.length];
+                ctx.fillStyle = agent.finished ? '#4caf50' : color;
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Agent border
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Agent label
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(agent.name.split('#')[1] || (index + 1), x, y + 4);
+
+                // Speed indicator (trail)
+                if (agent.speed > 0 && !agent.finished) {
+                    const trailLength = Math.min(agent.speed / 5, 20);
+                    const prevAngle = angle - (trailLength * 2 * Math.PI / trackLength);
+                    const prevX = centerX + radius * Math.cos(prevAngle);
+                    const prevY = centerY + radius * Math.sin(prevAngle);
+
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 4;
+                    ctx.globalAlpha = 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(prevX, prevY);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            });
+        }
+
+        function updateLeaderboard(standings) {
+            const list = document.getElementById('leaderboardList');
+            list.innerHTML = '';
+
+            standings.forEach((agent, index) => {
+                const item = document.createElement('div');
+                item.className = 'leaderboard-item';
+
+                if (index === 0) item.classList.add('first');
+                else if (index === 1) item.classList.add('second');
+                else if (index === 2) item.classList.add('third');
+
+                const rankClass = index < 3 ? 'rank' : '';
+                const finishedClass = agent.finished ? 'finished' : '';
+
+                item.innerHTML = `
+                    <div class="${rankClass}">${agent.rank}</div>
+                    <div class="agent-name ${finishedClass}">${agent.name}</div>
+                    <div>${agent.lap}</div>
+                    <div>${agent.progress.toFixed(1)}%</div>
+                `;
+
+                list.appendChild(item);
+            });
+        }
+
+        // Initialize
+        window.onload = () => {
+            connectWebSocket();
+            console.log('Shifters Visualization loaded');
+        };
+    </script>
+</body>
+</html>

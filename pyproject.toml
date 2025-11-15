@@ -8,6 +8,9 @@ dependencies = [
     "graphviz>=0.21",
     "matplotlib>=3.10.7",
     "mesa>=3.3.1",
+    "mesa-viz-tornado>=0.1.3",
+    "networkx>=3.5",
     "pydantic>=2.12.4",
+    "solara>=1.54.0",
     "uvicorn>=0.38.0",
 ]
