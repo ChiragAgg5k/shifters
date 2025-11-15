@@ -10,15 +10,15 @@ console.log('🧪 Testing Enhanced Physics Implementation\n')
 
 // Create a test vehicle
 const vehicle = new RacingVehicle({
-  id: 'test-1',
-  name: 'Test Vehicle',
-  maxSpeed: 95,
-  acceleration: 12,
-  qualifyingPosition: 1,
-  // Advanced physics parameters
-  differentialPreload: 50.0,
-  engineBraking: 0.5,
-  brakeBalance: 0.54
+    id: 'test-1',
+    name: 'Test Vehicle',
+    maxSpeed: 95,
+    acceleration: 12,
+    qualifyingPosition: 1,
+    // Advanced physics parameters
+    differentialPreload: 50.0,
+    engineBraking: 0.5,
+    brakeBalance: 0.54
 })
 
 console.log('✅ Vehicle created with parameters:')

@@ -149,17 +149,17 @@ vehicle.adjustBrakeBalance(+0.02)  // +2% front
 
 ## Typical Values
 
-| Parameter | Low | Optimal | High |
-|-----------|-----|---------|------|
-| Speed | 30 m/s | 80 m/s | 95 m/s |
-| Downforce | 2.5 kN | 18 kN | 25 kN |
-| Front Load | 3 kN | 3.6 kN | 5 kN |
-| Rear Load | 2.5 kN | 4.2 kN | 6 kN |
-| Traction | 0.90 | 1.05 | 1.15 |
-| Brake Eff | 60% | 95% | 100% |
-| Diff Preload | 30 Nm | 50 Nm | 70 Nm |
-| Engine Brake | 0.3 | 0.5 | 0.7 |
-| Brake Balance | 0.50 | 0.54 | 0.58 |
+| Parameter     | Low    | Optimal | High   |
+| ------------- | ------ | ------- | ------ |
+| Speed         | 30 m/s | 80 m/s  | 95 m/s |
+| Downforce     | 2.5 kN | 18 kN   | 25 kN  |
+| Front Load    | 3 kN   | 3.6 kN  | 5 kN   |
+| Rear Load     | 2.5 kN | 4.2 kN  | 6 kN   |
+| Traction      | 0.90   | 1.05    | 1.15   |
+| Brake Eff     | 60%    | 95%     | 100%   |
+| Diff Preload  | 30 Nm  | 50 Nm   | 70 Nm  |
+| Engine Brake  | 0.3    | 0.5     | 0.7    |
+| Brake Balance | 0.50   | 0.54    | 0.58   |
 
 ## Performance Characteristics
 

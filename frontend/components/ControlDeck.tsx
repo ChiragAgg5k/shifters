@@ -16,9 +16,34 @@ interface ControlDeckProps {
   setRaceActive: (active: boolean) => void
   startRace: (config: RaceConfig) => void
   stopRace: () => void
+  updateSpeedMultiplier?: (multiplier: number) => void
+  updateTrackTemperature?: (temp: number) => void
+  updateWeather?: (weather: string) => void
+  updateRainProbability?: (probability: number) => void
+  updateVehicleMaxSpeed?: (vehicleIndex: number, maxSpeed: number) => void
+  updateVehicleAcceleration?: (vehicleIndex: number, acceleration: number) => void
+  updateVehicleDnfProbability?: (vehicleIndex: number, dnfProbability: number) => void
+  updateVehicleCorneringSkill?: (vehicleIndex: number, corneringSkill: number) => void
+  updateVehicleDifferentialPreload?: (vehicleIndex: number, differentialPreload: number) => void
+  updateVehicleEngineBraking?: (vehicleIndex: number, engineBraking: number) => void
+  updateVehicleBrakeBalance?: (vehicleIndex: number, brakeBalance: number) => void
 }
 
-export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProps) {
+export function ControlDeck({
+  raceActive,
+  startRace,
+  stopRace,
+  updateSpeedMultiplier,
+  updateTrackTemperature,
+  updateRainProbability,
+  updateVehicleMaxSpeed,
+  updateVehicleAcceleration,
+  updateVehicleDnfProbability,
+  updateVehicleCorneringSkill,
+  updateVehicleDifferentialPreload,
+  updateVehicleEngineBraking,
+  updateVehicleBrakeBalance
+}: ControlDeckProps) {
   const [numAgents, setNumAgents] = useState(5)
   const [numLaps, setNumLaps] = useState(3)
   const [circuit, setCircuit] = useState('mc-1929')
@@ -26,21 +51,30 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
   const [rainProbability, setRainProbability] = useState(0)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
   const [circuits, setCircuits] = useState<Circuit[]>([])
-  
+
   // Agent customization
   const [customizeAgents, setCustomizeAgents] = useState(false)
   const [agentMaxSpeed, setAgentMaxSpeed] = useState(90)
   const [agentAcceleration, setAgentAcceleration] = useState(12.5)
   const [agentDnfProbability, setAgentDnfProbability] = useState(2)
-  
+  const [agentCorneringSkill, setAgentCorneringSkill] = useState(1.2)
+
   // Advanced physics parameters
   const [agentDifferential, setAgentDifferential] = useState(50)
   const [agentEngineBraking, setAgentEngineBraking] = useState(0.5)
   const [agentBrakeBalance, setAgentBrakeBalance] = useState(0.54)
-  
+
   // Per-agent customization
   const [perAgentCustomize, setPerAgentCustomize] = useState(false)
-  const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, { maxSpeed: number; acceleration: number; dnfProbability: number; differentialPreload?: number; engineBraking?: number; brakeBalance?: number }>>({})
+  const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, {
+    maxSpeed: number;
+    acceleration: number;
+    dnfProbability: number;
+    corneringSkill: number;
+    differentialPreload?: number;
+    engineBraking?: number;
+    brakeBalance?: number
+  }>>({})
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null)
 
   // Load circuits from public folder
@@ -172,9 +206,14 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
             min="10"
             max="60"
             value={trackTemp}
-            onChange={(e) => setTrackTemp(parseInt(e.target.value))}
-            disabled={raceActive}
-            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+            onChange={(e) => {
+              const newTemp = parseInt(e.target.value)
+              setTrackTemp(newTemp)
+              if (raceActive && updateTrackTemperature) {
+                updateTrackTemperature(newTemp)
+              }
+            }}
+            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -187,9 +226,14 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
             min="0"
             max="100"
             value={rainProbability}
-            onChange={(e) => setRainProbability(parseInt(e.target.value))}
-            disabled={raceActive}
-            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+            onChange={(e) => {
+              const newRain = parseInt(e.target.value)
+              setRainProbability(newRain)
+              if (raceActive && updateRainProbability) {
+                updateRainProbability(newRain / 100)
+              }
+            }}
+            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -203,9 +247,14 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
             max="4"
             step="0.5"
             value={speedMultiplier}
-            onChange={(e) => setSpeedMultiplier(parseFloat(e.target.value))}
-            disabled={raceActive}
-            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+            onChange={(e) => {
+              const newSpeed = parseFloat(e.target.value)
+              setSpeedMultiplier(newSpeed)
+              if (raceActive && updateSpeedMultiplier) {
+                updateSpeedMultiplier(newSpeed)
+              }
+            }}
+            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
           />
           <div className="text-xs text-muted-foreground text-center">0.5x - 4x speed</div>
         </div>
@@ -236,7 +285,7 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
         </div>
 
         {customizeAgents && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-input/50 p-4 rounded-md">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-input/50 p-4 rounded-md">
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">
                 Max Speed: {agentMaxSpeed.toFixed(1)} m/s
@@ -247,9 +296,17 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="110"
                 step="1"
                 value={agentMaxSpeed}
-                onChange={(e) => setAgentMaxSpeed(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newSpeed = parseFloat(e.target.value)
+                  setAgentMaxSpeed(newSpeed)
+                  if (raceActive && updateVehicleMaxSpeed) {
+                    // Update all vehicles with new speed
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleMaxSpeed(i, newSpeed)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">70 - 110 m/s</div>
             </div>
@@ -264,9 +321,17 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="16"
                 step="0.1"
                 value={agentAcceleration}
-                onChange={(e) => setAgentAcceleration(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newAccel = parseFloat(e.target.value)
+                  setAgentAcceleration(newAccel)
+                  if (raceActive && updateVehicleAcceleration) {
+                    // Update all vehicles with new acceleration
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleAcceleration(i, newAccel)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">8 - 16 m/s²</div>
             </div>
@@ -281,11 +346,44 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="10"
                 step="0.5"
                 value={agentDnfProbability}
-                onChange={(e) => setAgentDnfProbability(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newDnf = parseFloat(e.target.value)
+                  setAgentDnfProbability(newDnf)
+                  if (raceActive && updateVehicleDnfProbability) {
+                    // Update all vehicles with new DNF probability
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleDnfProbability(i, newDnf / 100)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">0 - 10%</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Cornering Skill: {agentCorneringSkill.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={agentCorneringSkill}
+                onChange={(e) => {
+                  const newSkill = parseFloat(e.target.value)
+                  setAgentCorneringSkill(newSkill)
+                  if (raceActive && updateVehicleCorneringSkill) {
+                    // Update all vehicles with new cornering skill
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleCorneringSkill(i, newSkill)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="text-xs text-muted-foreground text-center">0.5 - 2.0</div>
             </div>
           </div>
         )}
@@ -302,9 +400,17 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="100"
                 step="5"
                 value={agentDifferential}
-                onChange={(e) => setAgentDifferential(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newDiff = parseFloat(e.target.value)
+                  setAgentDifferential(newDiff)
+                  if (raceActive && updateVehicleDifferentialPreload) {
+                    // Update all vehicles with new differential preload
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleDifferentialPreload(i, newDiff)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">0 - 100 Nm (optimal: 50)</div>
             </div>
@@ -319,9 +425,17 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="1"
                 step="0.05"
                 value={agentEngineBraking}
-                onChange={(e) => setAgentEngineBraking(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newEB = parseFloat(e.target.value)
+                  setAgentEngineBraking(newEB)
+                  if (raceActive && updateVehicleEngineBraking) {
+                    // Update all vehicles with new engine braking
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleEngineBraking(i, newEB)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">0 - 100% (typical: 50%)</div>
             </div>
@@ -336,9 +450,17 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                 max="0.7"
                 step="0.01"
                 value={agentBrakeBalance}
-                onChange={(e) => setAgentBrakeBalance(parseFloat(e.target.value))}
-                disabled={raceActive}
-                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                onChange={(e) => {
+                  const newBB = parseFloat(e.target.value)
+                  setAgentBrakeBalance(newBB)
+                  if (raceActive && updateVehicleBrakeBalance) {
+                    // Update all vehicles with new brake balance
+                    for (let i = 0; i < numAgents; i++) {
+                      updateVehicleBrakeBalance(i, newBB)
+                    }
+                  }
+                }}
+                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
               <div className="text-xs text-muted-foreground text-center">40 - 70% (optimal: 52-56%)</div>
             </div>
@@ -378,7 +500,7 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
 
                 {expandedAgent === i && (
                   <div className="space-y-3 mt-3 pt-3 border-t border-border">
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground">
                           Speed: {(perAgentConfigs[i]?.maxSpeed ?? 90).toFixed(1)} m/s
@@ -389,10 +511,16 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="110"
                           step="1"
                           value={perAgentConfigs[i]?.maxSpeed ?? 90}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], maxSpeed: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newSpeed = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], maxSpeed: newSpeed }
+                            })
+                            if (raceActive && updateVehicleMaxSpeed) {
+                              updateVehicleMaxSpeed(i, newSpeed)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
@@ -407,10 +535,16 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="16"
                           step="0.1"
                           value={perAgentConfigs[i]?.acceleration ?? 12.5}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], acceleration: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newAccel = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], acceleration: newAccel }
+                            })
+                            if (raceActive && updateVehicleAcceleration) {
+                              updateVehicleAcceleration(i, newAccel)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
@@ -425,10 +559,40 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="10"
                           step="0.5"
                           value={perAgentConfigs[i]?.dnfProbability ?? 2}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], dnfProbability: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newDnf = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], dnfProbability: newDnf }
+                            })
+                            if (raceActive && updateVehicleDnfProbability) {
+                              updateVehicleDnfProbability(i, newDnf / 100)
+                            }
+                          }}
+                          className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Skill: {(perAgentConfigs[i]?.corneringSkill ?? 1.2).toFixed(2)}
+                        </label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2"
+                          step="0.1"
+                          value={perAgentConfigs[i]?.corneringSkill ?? 1.2}
+                          onChange={(e) => {
+                            const newSkill = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], corneringSkill: newSkill }
+                            })
+                            if (raceActive && updateVehicleCorneringSkill) {
+                              updateVehicleCorneringSkill(i, newSkill)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
@@ -446,10 +610,16 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="100"
                           step="5"
                           value={perAgentConfigs[i]?.differentialPreload ?? 50}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], differentialPreload: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newDiff = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], differentialPreload: newDiff }
+                            })
+                            if (raceActive && updateVehicleDifferentialPreload) {
+                              updateVehicleDifferentialPreload(i, newDiff)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
@@ -464,10 +634,16 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="1"
                           step="0.05"
                           value={perAgentConfigs[i]?.engineBraking ?? 0.5}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], engineBraking: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newEB = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], engineBraking: newEB }
+                            })
+                            if (raceActive && updateVehicleEngineBraking) {
+                              updateVehicleEngineBraking(i, newEB)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
@@ -482,10 +658,16 @@ export function ControlDeck({ raceActive, startRace, stopRace }: ControlDeckProp
                           max="0.7"
                           step="0.01"
                           value={perAgentConfigs[i]?.brakeBalance ?? 0.54}
-                          onChange={(e) => setPerAgentConfigs({
-                            ...perAgentConfigs,
-                            [i]: { ...perAgentConfigs[i], brakeBalance: parseFloat(e.target.value) }
-                          })}
+                          onChange={(e) => {
+                            const newBB = parseFloat(e.target.value)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], brakeBalance: newBB }
+                            })
+                            if (raceActive && updateVehicleBrakeBalance) {
+                              updateVehicleBrakeBalance(i, newBB)
+                            }
+                          }}
                           className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
                         />
                       </div>

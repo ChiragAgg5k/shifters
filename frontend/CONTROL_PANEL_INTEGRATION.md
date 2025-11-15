@@ -296,11 +296,11 @@ Agent #3: diff=40, EB=0.3, BB=0.54
 
 ## Parameter Ranges & Optimal Values
 
-| Parameter | Min | Default | Max | Optimal Range | Unit |
-|-----------|-----|---------|-----|---------------|------|
-| Differential Preload | 0 | **50** | 100 | 45-55 | Nm |
-| Engine Braking | 0.0 | **0.5** | 1.0 | 0.4-0.6 | 0-1 |
-| Brake Balance | 0.4 | **0.54** | 0.7 | 0.52-0.56 | 0-1 (front%) |
+| Parameter            | Min | Default  | Max | Optimal Range | Unit         |
+| -------------------- | --- | -------- | --- | ------------- | ------------ |
+| Differential Preload | 0   | **50**   | 100 | 45-55         | Nm           |
+| Engine Braking       | 0.0 | **0.5**  | 1.0 | 0.4-0.6       | 0-1          |
+| Brake Balance        | 0.4 | **0.54** | 0.7 | 0.52-0.56     | 0-1 (front%) |
 
 **Effects:**
 

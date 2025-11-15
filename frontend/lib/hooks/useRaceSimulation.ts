@@ -36,25 +36,15 @@ export interface RaceConfig {
   perAgentConfig?: PerAgentConfig
 }
 
-// Load circuits from public folder
-async function loadCircuits() {
-  try {
-    const response = await fetch('/data/circuits/f1-circuits.json')
-    const data = await response.json()
-    return data.circuits
-  } catch (error) {
-    console.error('Failed to load circuits:', error)
-    return []
-  }
-}
 
 export function useRaceSimulation() {
   const [raceState, setRaceState] = useState<SimulationState | null>(null)
   const [isRunning, setIsRunning] = useState(false)
-  
+
   const simulationRef = useRef<RaceSimulation | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
+  const speedMultiplierRef = useRef<number>(1)
 
   /**
    * Stop the race
@@ -64,12 +54,12 @@ export function useRaceSimulation() {
       simulationRef.current.stop()
       simulationRef.current = null
     }
-    
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    
+
     setIsRunning(false)
     setRaceState(null)
   }, [])
@@ -120,11 +110,11 @@ export function useRaceSimulation() {
       // Priority: per-agent config > global agent config > defaults with skill variation
       const perAgentCfg = config.perAgentConfig?.[i]
       const globalCfg = config.agentConfig
-      
+
       const maxSpeed = perAgentCfg?.maxSpeed ?? globalCfg?.maxSpeed ?? (85 + ((config.numAgents - 1 - i) * 2)) // 85-95 m/s
       const acceleration = perAgentCfg?.acceleration ?? globalCfg?.acceleration ?? (12 + ((config.numAgents - 1 - i) * 0.5))
       const dnfProbability = perAgentCfg?.dnfProbability ?? globalCfg?.dnfProbability ?? 0.02
-      
+
       // Advanced physics parameters
       const differentialPreload = perAgentCfg?.differentialPreload ?? globalCfg?.differentialPreload ?? 50.0
       const engineBraking = perAgentCfg?.engineBraking ?? globalCfg?.engineBraking ?? 0.5
@@ -153,9 +143,8 @@ export function useRaceSimulation() {
 
     // Start animation loop
     lastUpdateRef.current = performance.now()
-    const speedMultiplier = config.speedMultiplier || 1
-    const timeStep = 100 / speedMultiplier // Adjust time step based on speed multiplier
-    
+    speedMultiplierRef.current = config.speedMultiplier || 1
+
     // Run animation loop
     const loop = (currentTime: number) => {
       const sim = simulationRef.current
@@ -163,6 +152,10 @@ export function useRaceSimulation() {
         setIsRunning(false)
         return
       }
+
+      // Use current speed multiplier (can change during race)
+      const speedMultiplier = speedMultiplierRef.current
+      const timeStep = 100 / speedMultiplier
 
       // Fixed time step with speed multiplier
       const elapsed = currentTime - lastUpdateRef.current
@@ -174,10 +167,10 @@ export function useRaceSimulation() {
             sim.stepSimulation()
           }
         }
-        
+
         // Update state
         setRaceState(sim.getState())
-        
+
         lastUpdateRef.current = currentTime
       }
 
@@ -197,10 +190,120 @@ export function useRaceSimulation() {
     }
   }, [stopRace])
 
+  /**
+   * Update speed multiplier during race
+   */
+  const updateSpeedMultiplier = useCallback((multiplier: number) => {
+    speedMultiplierRef.current = multiplier
+  }, [])
+
+  /**
+   * Update track temperature during race
+   */
+  const updateTrackTemperature = useCallback((temp: number) => {
+    if (simulationRef.current) {
+      simulationRef.current.temperature = temp
+    }
+  }, [])
+
+  /**
+   * Update weather during race
+   */
+  const updateWeather = useCallback((weather: string) => {
+    if (simulationRef.current) {
+      simulationRef.current.weather = weather
+    }
+  }, [])
+
+  /**
+   * Update rain probability during race (determines weather)
+   */
+  const updateRainProbability = useCallback((probability: number) => {
+    if (simulationRef.current) {
+      // Determine weather based on probability
+      const weather = Math.random() < probability ? 'rain' : 'clear'
+      simulationRef.current.weather = weather
+    }
+  }, [])
+
+  /**
+   * Update vehicle max speed during race
+   */
+  const updateVehicleMaxSpeed = useCallback((vehicleIndex: number, maxSpeed: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].maxSpeed = maxSpeed
+    }
+  }, [])
+
+  /**
+   * Update vehicle acceleration during race
+   */
+  const updateVehicleAcceleration = useCallback((vehicleIndex: number, acceleration: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].acceleration = acceleration
+    }
+  }, [])
+
+  /**
+   * Update vehicle DNF probability during race
+   */
+  const updateVehicleDnfProbability = useCallback((vehicleIndex: number, dnfProbability: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].dnfProbability = dnfProbability
+    }
+  }, [])
+
+  /**
+   * Update vehicle cornering skill during race
+   */
+  const updateVehicleCorneringSkill = useCallback((vehicleIndex: number, corneringSkill: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].corneringSkill = corneringSkill
+    }
+  }, [])
+
+  /**
+   * Update vehicle differential preload during race
+   */
+  const updateVehicleDifferentialPreload = useCallback((vehicleIndex: number, differentialPreload: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].updateDifferentialPreload(differentialPreload)
+    }
+  }, [])
+
+  /**
+   * Update vehicle engine braking during race
+   */
+  const updateVehicleEngineBraking = useCallback((vehicleIndex: number, engineBraking: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].updateEngineBraking(engineBraking)
+    }
+  }, [])
+
+  /**
+   * Update vehicle brake balance during race
+   */
+  const updateVehicleBrakeBalance = useCallback((vehicleIndex: number, brakeBalance: number) => {
+    if (simulationRef.current && vehicleIndex < simulationRef.current.vehicles.length) {
+      simulationRef.current.vehicles[vehicleIndex].updateBrakeBalance(brakeBalance)
+    }
+  }, [])
+
   return {
     raceState,
     isRunning,
     startRace,
-    stopRace
+    stopRace,
+    updateSpeedMultiplier,
+    updateTrackTemperature,
+    updateWeather,
+    updateRainProbability,
+    updateVehicleMaxSpeed,
+    updateVehicleAcceleration,
+    updateVehicleDnfProbability,
+    updateVehicleCorneringSkill,
+    updateVehicleDifferentialPreload,
+    updateVehicleEngineBraking,
+    updateVehicleBrakeBalance
   }
 }

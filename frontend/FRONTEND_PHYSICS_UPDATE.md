@@ -174,17 +174,17 @@ All tests passed ✅
 
 ## Comparison: Before vs After
 
-| Feature | Before | After | Improvement |
-|---------|--------|-------|-------------|
-| **Cornering Model** | Simplified `v/(1+c*10)` | Force balance `√(μNr/m)` | ✅ Physics-accurate |
-| **Downforce** | 5% speed bonus | Adds to normal force | ✅ Realistic |
-| **Load Transfer** | ❌ Not modeled | 4-wheel distribution | ✅ Complete |
-| **Differential** | ❌ Missing | LSD with preload | ✅ Implemented |
-| **Engine Braking** | ❌ Missing | RPM-dependent | ✅ Implemented |
-| **Brake Balance** | ❌ Missing | Load-sensitive w/ lock-up | ✅ Implemented |
-| **Tire Model** | Constant grip | Load-sensitive (-3%/1000N) | ✅ Enhanced |
-| **RL Interface** | ❌ Missing | 13-dim state, reward | ✅ Full support |
-| **Overall Rating** | 5.5/10 | 9.5/10 | +4.0 points |
+| Feature             | Before                  | After                      | Improvement        |
+| ------------------- | ----------------------- | -------------------------- | ------------------ |
+| **Cornering Model** | Simplified `v/(1+c*10)` | Force balance `√(μNr/m)`   | ✅ Physics-accurate |
+| **Downforce**       | 5% speed bonus          | Adds to normal force       | ✅ Realistic        |
+| **Load Transfer**   | ❌ Not modeled           | 4-wheel distribution       | ✅ Complete         |
+| **Differential**    | ❌ Missing               | LSD with preload           | ✅ Implemented      |
+| **Engine Braking**  | ❌ Missing               | RPM-dependent              | ✅ Implemented      |
+| **Brake Balance**   | ❌ Missing               | Load-sensitive w/ lock-up  | ✅ Implemented      |
+| **Tire Model**      | Constant grip           | Load-sensitive (-3%/1000N) | ✅ Enhanced         |
+| **RL Interface**    | ❌ Missing               | 13-dim state, reward       | ✅ Full support     |
+| **Overall Rating**  | 5.5/10                  | 9.5/10                     | +4.0 points        |
 
 ---
 
@@ -353,16 +353,16 @@ Can add controls for:
 
 ## Validation Against Python Backend
 
-| System | Python Output | TypeScript Output | Match? |
-|--------|---------------|-------------------|--------|
-| Differential (straight) | 1.000 | 1.000 | ✅ |
-| Differential (corner) | 1.100 | 1.100 | ✅ |
-| Engine braking | -0.79 m/s² | -0.79 m/s² | ✅ |
-| Load transfer (4 wheels) | Calculated | Calculated | ✅ |
-| Brake balance | 54% front | 54% front | ✅ |
-| Lock-up detection | Working | Working | ✅ |
-| State vector | 13 dims | 13 dims | ✅ |
-| Reward range | -15 to +14 | -15 to +14 | ✅ |
+| System                   | Python Output | TypeScript Output | Match? |
+| ------------------------ | ------------- | ----------------- | ------ |
+| Differential (straight)  | 1.000         | 1.000             | ✅      |
+| Differential (corner)    | 1.100         | 1.100             | ✅      |
+| Engine braking           | -0.79 m/s²    | -0.79 m/s²        | ✅      |
+| Load transfer (4 wheels) | Calculated    | Calculated        | ✅      |
+| Brake balance            | 54% front     | 54% front         | ✅      |
+| Lock-up detection        | Working       | Working           | ✅      |
+| State vector             | 13 dims       | 13 dims           | ✅      |
+| Reward range             | -15 to +14    | -15 to +14        | ✅      |
 
 ---
 

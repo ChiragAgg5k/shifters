@@ -6,7 +6,23 @@ import { DataGrid } from '@/components/DataGrid'
 import { useRaceSimulation } from '@/lib/hooks/useRaceSimulation'
 
 export default function Home() {
-  const { raceState, isRunning, startRace, stopRace } = useRaceSimulation()
+  const {
+    raceState,
+    isRunning,
+    startRace,
+    stopRace,
+    updateSpeedMultiplier,
+    updateTrackTemperature,
+    updateWeather,
+    updateRainProbability,
+    updateVehicleMaxSpeed,
+    updateVehicleAcceleration,
+    updateVehicleDnfProbability,
+    updateVehicleCorneringSkill,
+    updateVehicleDifferentialPreload,
+    updateVehicleEngineBraking,
+    updateVehicleBrakeBalance
+  } = useRaceSimulation()
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -21,7 +37,20 @@ export default function Home() {
             <RaceVisualization raceState={raceState} />
           </div>
           <div>
-            <ControlDeck raceActive={isRunning} setRaceActive={() => {}} startRace={startRace} stopRace={stopRace} />
+            <ControlDeck
+              raceActive={isRunning}
+              setRaceActive={() => { }}
+              startRace={startRace}
+              stopRace={stopRace}
+              updateSpeedMultiplier={updateSpeedMultiplier}
+              updateTrackTemperature={updateTrackTemperature}
+              updateWeather={updateWeather}
+              updateRainProbability={updateRainProbability}
+              updateVehicleMaxSpeed={updateVehicleMaxSpeed}
+              updateVehicleAcceleration={updateVehicleAcceleration}
+              updateVehicleDnfProbability={updateVehicleDnfProbability}
+              updateVehicleCorneringSkill={updateVehicleCorneringSkill}
+            />
           </div>
         </div>
 

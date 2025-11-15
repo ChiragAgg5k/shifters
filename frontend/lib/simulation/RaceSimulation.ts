@@ -36,18 +36,18 @@ export class RaceSimulation {
   timeStep: number
   weather: string
   temperature: number
-  
+
   vehicles: RacingVehicle[] = []
   running: boolean = false
   simulationTime: number = 0
   step: number = 0
   currentLap: number = 0
-  
+
   // Safety car
   safetyCarActive: boolean = false
   safetyCarDuration: number = 0
   safetyCarLapsRemaining: number = 0
-  
+
   // DNFs
   dnfVehicles: Set<string> = new Set()
 
@@ -73,12 +73,12 @@ export class RaceSimulation {
     this.simulationTime = 0
     this.step = 0
     this.currentLap = 0
-    
+
     console.log(`🏁 Race started with ${this.vehicles.length} vehicles on ${this.track.name}`)
     console.log(`📏 Track length: ${this.track.length.toFixed(0)}m, Laps: ${this.track.numLaps}`)
     console.log(`🌡️ Track Temperature: ${this.temperature}°C`)
     console.log(`🌧️ Weather: ${this.weather}`)
-    console.log(`⏱️ Time step: ${this.timeStep}s (${(1/this.timeStep).toFixed(0)} FPS)`)
+    console.log(`⏱️ Time step: ${this.timeStep}s (${(1 / this.timeStep).toFixed(0)} FPS)`)
   }
 
   /**
@@ -119,49 +119,59 @@ export class RaceSimulation {
 
       // Get track curvature at current position
       const curvature = this.track.getCurvature(vehicle.position)
-      
+
       // Calculate target speed BEFORE moving
       vehicle.calculateTargetSpeed(curvature, this.weather, this.temperature)
-      
+
       // Safety car limits speed
       if (this.safetyCarActive) {
         vehicle.targetSpeed = Math.min(vehicle.targetSpeed, 40) // 40 m/s under safety car
       }
-      
+
       // Check slipstream
       vehicle.checkSlipstream(this.vehicles, this.track.length)
-      
+
       // DRS management (only on straights, not under safety car)
       if (curvature === 0 && !this.safetyCarActive) {
         vehicle.activateDrs()
       } else {
         vehicle.deactivateDrs()
       }
-      
+
       // Move vehicle
       vehicle.move(this.timeStep, this.track.length)
-      
+
+      // Apply weather-based tire cooling after movement
+      const ambientTemp = this.temperature
+      if (vehicle.tireTemperature > ambientTemp) {
+        let coolingRate = (vehicle.tireTemperature - ambientTemp) * 0.01 * this.timeStep
+        if (this.weather === 'rain') {
+          coolingRate *= 2.0 // Rain cools tires faster
+        }
+        vehicle.tireTemperature = Math.max(ambientTemp, vehicle.tireTemperature - coolingRate)
+      }
+
       // Check lap completion
       if (vehicle.justCrossedLine) {
         const lapTime = this.simulationTime - vehicle.lapTimes.reduce((a, b) => a + b, 0)
         vehicle.completeLap(lapTime)
-        
+
         // Check if finished race (after completing the lap)
         if (vehicle.lap >= this.track.numLaps) {
           vehicle.finished = true
           console.log(`🏁 ${vehicle.name} finished in position ${this.getFinishedCount()}`)
         }
       }
-      
+
       // DNF check (once per lap)
       if (vehicle.lap > vehicle.lastDnfCheckLap && vehicle.lap > 0) {
         vehicle.lastDnfCheckLap = vehicle.lap
-        
+
         const dnfChance = vehicle.dnfProbability / Math.max(this.track.numLaps, 1)
         if (Math.random() < dnfChance) {
           this.dnfVehicles.add(vehicle.id)
           console.log(`❌ DNF: ${vehicle.name} on lap ${vehicle.lap}`)
-          
+
           // 30% chance of safety car
           if (Math.random() < 0.3 && !this.safetyCarActive) {
             this.deploySafetyCar()
@@ -179,7 +189,7 @@ export class RaceSimulation {
       this.running = false
       console.log(`🏆 Race finished! Total time: ${this.simulationTime.toFixed(2)}s`)
     }
-    
+
     // Debug: log first vehicle status every 10 steps
     if (this.step % 100 === 0 && this.step > 0) {
       const v = this.vehicles[0]
@@ -215,7 +225,7 @@ export class RaceSimulation {
     sortedVehicles.forEach((vehicle, index) => {
       const oldPosition = vehicle.currentPosition
       vehicle.currentPosition = index + 1
-      
+
       // Track overtakes
       if (oldPosition > vehicle.currentPosition) {
         vehicle.overtakes++
@@ -253,6 +263,70 @@ export class RaceSimulation {
         duration: this.safetyCarLapsRemaining
       },
       dnfs: Array.from(this.dnfVehicles)
+    }
+  }
+
+  /**
+   * Realtime update methods for simulation parameters
+   */
+  updateWeather(newWeather: string): void {
+    this.weather = newWeather
+    console.log(`🌦️ Weather updated to: ${newWeather}`)
+  }
+
+  updateTemperature(newTemperature: number): void {
+    this.temperature = newTemperature
+    console.log(`🌡️ Temperature updated to: ${newTemperature}°C`)
+  }
+
+  /**
+   * Realtime update methods for individual vehicle parameters
+   */
+  updateVehicleMaxSpeed(vehicleIndex: number, newMaxSpeed: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateMaxSpeed(newMaxSpeed)
+    }
+  }
+
+  updateVehicleAcceleration(vehicleIndex: number, newAcceleration: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateAcceleration(newAcceleration)
+    }
+  }
+
+  updateVehicleBrakingRate(vehicleIndex: number, newBrakingRate: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateBrakingRate(newBrakingRate)
+    }
+  }
+
+  updateVehicleCorneringSkill(vehicleIndex: number, newCorneringSkill: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateCorneringSkill(newCorneringSkill)
+    }
+  }
+
+  updateVehicleDnfProbability(vehicleIndex: number, newDnfProbability: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateDnfProbability(newDnfProbability)
+    }
+  }
+
+  updateVehicleDifferentialPreload(vehicleIndex: number, newDifferentialPreload: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateDifferentialPreload(newDifferentialPreload)
+    }
+  }
+
+  updateVehicleEngineBraking(vehicleIndex: number, newEngineBraking: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateEngineBraking(newEngineBraking)
+    }
+  }
+
+  updateVehicleBrakeBalance(vehicleIndex: number, newBrakeBalance: number): void {
+    if (vehicleIndex >= 0 && vehicleIndex < this.vehicles.length) {
+      this.vehicles[vehicleIndex].updateBrakeBalance(newBrakeBalance)
     }
   }
 }
