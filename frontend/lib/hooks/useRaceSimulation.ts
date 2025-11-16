@@ -10,6 +10,8 @@ import { Track } from '../track/Track'
 import type { SimulationState } from '../simulation/RaceSimulation'
 
 export interface AgentConfig {
+  name?: string
+  number?: number
   maxSpeed?: number
   acceleration?: number
   dnfProbability?: number
@@ -107,22 +109,26 @@ export function useRaceSimulation() {
     ]
 
     for (let i = 0; i < config.numAgents; i++) {
-      // Priority: per-agent config > global agent config > defaults with skill variation
+      // Priority: per-agent config > global agent config > defaults
       const perAgentCfg = config.perAgentConfig?.[i]
       const globalCfg = config.agentConfig
-
-      const maxSpeed = perAgentCfg?.maxSpeed ?? globalCfg?.maxSpeed ?? (85 + ((config.numAgents - 1 - i) * 2)) // 85-95 m/s
-      const acceleration = perAgentCfg?.acceleration ?? globalCfg?.acceleration ?? (12 + ((config.numAgents - 1 - i) * 0.5))
-      const dnfProbability = perAgentCfg?.dnfProbability ?? globalCfg?.dnfProbability ?? 0.02;
+      
+      const maxSpeed = perAgentCfg?.maxSpeed ?? globalCfg?.maxSpeed ?? 90
+      const acceleration = perAgentCfg?.acceleration ?? globalCfg?.acceleration ?? 12
+      const dnfProbability = perAgentCfg?.dnfProbability ?? globalCfg?.dnfProbability ?? 0.02
 
       // Advanced physics parameters
       const differentialPreload = perAgentCfg?.differentialPreload ?? globalCfg?.differentialPreload ?? 50.0
       const engineBraking = perAgentCfg?.engineBraking ?? globalCfg?.engineBraking ?? 0.5
       const brakeBalance = perAgentCfg?.brakeBalance ?? globalCfg?.brakeBalance ?? 0.54
 
+      // Custom name and number
+      const driverName = perAgentCfg?.name ?? `${vehicleNames[i % vehicleNames.length]}`
+      const driverNumber = perAgentCfg?.number ?? (i + 1)
+
       const vehicle = new RacingVehicle({
         id: `vehicle_${i}`,
-        name: `${vehicleNames[i % vehicleNames.length]} #${i + 1}`,
+        name: `${driverName} #${driverNumber}`,
         maxSpeed,
         acceleration,
         qualifyingPosition: i + 1,

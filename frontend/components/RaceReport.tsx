@@ -45,6 +45,13 @@ export function RaceReport({ reportData }: RaceReportProps) {
                         lapData[`${driver.name}_speed`] = (telemetry.avgSpeed || 0) * 3.6
                         lapData[`${driver.name}_energy`] = telemetry.energyEnd || 0
                         lapData[`${driver.name}_temp`] = telemetry.avgTireTemp || 0
+                        lapData[`${driver.name}_compound`] = telemetry.tireCompound || 'medium'
+                        
+                        // Mark stint start (new compound or lap 1)
+                        const prevLap = lap > 0 ? driver.telemetry[lap - 1] : null
+                        lapData[`${driver.name}_stintStart`] = lap === 0 || 
+                            (prevLap && prevLap.tireCompound !== telemetry.tireCompound)
+                        
                         hasValidData = true
                     }
                 }
@@ -59,6 +66,36 @@ export function RaceReport({ reportData }: RaceReportProps) {
     }
 
     const telemetryData = prepareTelemetryData()
+
+    // Custom dot for tire compound changes
+    const TireCompoundDot = (props: any) => {
+        const { cx, cy, payload, dataKey } = props
+        const driverName = dataKey.replace('_wear', '')
+        const isStintStart = payload[`${driverName}_stintStart`]
+        const compound = payload[`${driverName}_compound`]
+        
+        if (!isStintStart) return null
+        
+        // Tire compound colors
+        const compoundColors: Record<string, string> = {
+            soft: '#ef4444',      // Red
+            medium: '#fbbf24',    // Yellow
+            hard: '#ffffff',      // White
+            intermediate: '#4ade80', // Green
+            wet: '#3b82f6'        // Blue
+        }
+        
+        return (
+            <circle
+                cx={cx}
+                cy={cy}
+                r={5}
+                fill={compoundColors[compound] || '#fbbf24'}
+                stroke="#000"
+                strokeWidth={1}
+            />
+        )
+    }
 
     // Prepare classification data for bar chart
     const classificationData = drivers.map((driver: any) => ({
@@ -124,7 +161,7 @@ export function RaceReport({ reportData }: RaceReportProps) {
                                     dataKey={`${driver.name}_wear`}
                                     stroke={colors[index]}
                                     name={driver.name}
-                                    dot={false}
+                                    dot={<TireCompoundDot />}
                                     strokeWidth={2}
                                 />
                             ))}

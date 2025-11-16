@@ -367,6 +367,9 @@ export class RacingVehicle {
    * Enhanced with load transfer, differential, engine braking, and brake balance
    */
   move(timeStep: number, trackLength: number): void {
+    // Reset lap crossing flag at start of every move (critical for correct lap counting)
+    this.justCrossedLine = false
+    
     // Handle pit stop timing (simulation-based, not real-time)
     // DO NOT collect telemetry during pit stops
     if (this.inPit) {
@@ -494,77 +497,85 @@ export class RacingVehicle {
     if (this.drsActive) this.lapDrsTime += timeStep
     if (this.inSlipstream) this.lapSlipstreamTime += timeStep
 
-    // Normalize position for circuit tracks
-    this.justCrossedLine = false
+    // Normalize position for circuit tracks (check if line was crossed)
     if (this.position >= trackLength) {
       this.position = this.position % trackLength
       this.justCrossedLine = true
     }
 
     // ===== REALISTIC BATTERY & ENERGY MANAGEMENT =====
-    // F1 2024: 52 kWh battery, ~1100 kW peak power, ~160 kW average consumption
+    // F1 2024: Battery powers ERS deployment, ICE provides base power
+    // Drivers manage energy strategically throughout the race
     
-    // 1. POWER DEMAND CALCULATION
+    // 1. ERS DEPLOYMENT POWER DEMAND
     let powerDemand = 0 // kW
     
-    // Base power: proportional to speed (aerodynamic losses)
     const speedRatio = this.speed / this.maxSpeed
-    const dragPower = (0.5 * this.rho * this.Cd * this.A * Math.pow(this.speed, 3)) / 1000 // Convert to kW
-    powerDemand += dragPower
     
-    // Acceleration power: P = F * v
+    // Base ERS deployment to maintain speed (aerodynamic drag compensation)
+    // F1 cars need significant power just to maintain high speeds
+    const baseDragPower = Math.pow(speedRatio, 2) * 80 // 0-80 kW based on speed
+    powerDemand += baseDragPower
+    
+    // ERS deployment during acceleration (MGU-K)
     if (this.speed < this.targetSpeed) {
-      // Accelerating: need to overcome drag + provide acceleration
-      const accelForce = this.mass * this.acceleration
-      const accelPower = (accelForce * this.speed) / 1000 // kW
-      powerDemand += accelPower * 0.8 // 80% efficiency in drivetrain
+      // Deploy ERS: up to 120 kW from MGU-K, scaled by speed and acceleration need
+      const accelNeed = (this.targetSpeed - this.speed) / this.targetSpeed
+      const deploymentPower = Math.min(120, accelNeed * speedRatio * 180) // 0-180 kW
+      powerDemand += deploymentPower
     }
     
-    // Cornering power: lateral forces increase power demand
-    if (this.currentCurvature > 0) {
-      const corneringPower = Math.abs(this.currentCurvature * 100) * speedRatio * 50 // Up to 50 kW in hard corners
-      powerDemand += corneringPower
+    // Additional deployment on straights at high speed for overtaking
+    if (this.currentCurvature < 0.001 && this.speed > this.maxSpeed * 0.8) {
+      powerDemand += 40 // Extra 40 kW for straight-line speed
     }
     
-    // DRS deployment increases power demand
+    // ERS deployment in corners for traction
+    if (this.currentCurvature > 0.01 && this.speed > this.maxSpeed * 0.5) {
+      const corneringAssist = Math.min(70, this.currentCurvature * 100 * speedRatio * 70)
+      powerDemand += corneringAssist
+    }
+    
+    // DRS reduces drag, less ERS needed
     if (this.drsActive) {
-      powerDemand *= 1.05 // 5% more power to maintain speed with DRS
+      powerDemand *= 0.80 // 20% less deployment with DRS
     }
     
-    // 2. ENERGY RECOVERY (REGENERATIVE BRAKING & MGU-K)
+    // 2. ENERGY RECOVERY (MGU-K and MGU-H)
     let recoveredPower = 0 // kW
     
+    // MGU-H: Recovery from turbo (unlimited by regulations but limited by physics)
+    // Operates continuously but amount varies with engine load
+    if (this.speed > 10) {
+      // Higher recovery at mid-speeds, less at very high speeds
+      const mguHEfficiency = 1.0 - Math.abs(speedRatio - 0.6) // Peak at 60% speed
+      const mguHRecovery = 20 + (mguHEfficiency * 50) // 20-70 kW
+      recoveredPower += mguHRecovery
+    }
+    
+    // MGU-K: Regenerative braking (capped at 120 kW by regulations)
     if (this.speed > this.targetSpeed) {
-      // Braking: recover energy through regenerative braking
       const brakingForce = this.mass * this.brakingRate
       const brakingPower = (brakingForce * this.speed) / 1000 // kW
       
-      // Recovery efficiency depends on brake balance and engine braking
-      // More engine braking = more efficient recovery
+      // Recovery efficiency based on brake settings
       const recoveryEfficiency = this.ersEfficiency * (0.5 + this.engineBraking * 0.5) // 42.5%-85%
-      recoveredPower = brakingPower * recoveryEfficiency
+      const mgukRecovery = brakingPower * recoveryEfficiency
       
-      // Cap recovery at 120 kW (MGU-K limit)
-      recoveredPower = Math.min(recoveredPower, 120)
-    } else if (this.speed > 0 && this.currentCurvature > 0.01) {
-      // Cornering: recover some energy from lateral forces
-      const corneringForce = this.mass * (this.speed ** 2) * this.currentCurvature
-      const corneringRecovery = (corneringForce * this.speed) / 1000 * 0.1 // 10% of cornering force
-      recoveredPower = Math.min(corneringRecovery, 30) // Cap at 30 kW
+      // MGU-K recovery capped at 120 kW
+      recoveredPower += Math.min(mgukRecovery, 120)
     }
     
-    // 3. ENGINE BRAKING EFFECT ON POWER DEMAND
-    // Higher engine braking = more deceleration without using brakes
-    // This reduces brake wear but increases energy recovery
+    // 3. ENGINE BRAKING ADJUSTMENT
     if (this.speed > this.targetSpeed) {
-      const engineBrakingForce = this.engineBraking * 2.0 // Up to 2.0 m/s² deceleration
+      const engineBrakingForce = this.engineBraking * 2.0
       const engineBrakingPower = (engineBrakingForce * this.mass * this.speed) / 1000
       
-      // Engine braking reduces actual brake power needed
-      powerDemand -= engineBrakingPower * 0.5 // 50% of engine braking reduces power draw
+      // Engine braking slightly reduces deployment need
+      powerDemand = Math.max(0, powerDemand - engineBrakingPower * 0.3)
       
-      // But engine braking increases energy recovery
-      recoveredPower += engineBrakingPower * 0.3 // 30% of engine braking power recovered
+      // Small additional recovery from engine braking
+      recoveredPower += engineBrakingPower * 0.15
     }
     
     // 4. BATTERY STATE OF CHARGE MANAGEMENT

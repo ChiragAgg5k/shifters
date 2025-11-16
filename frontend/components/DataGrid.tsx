@@ -75,38 +75,51 @@ export function DataGrid({ raceState }: DataGridProps) {
             <div className="text-center py-8 text-muted-foreground">No race data yet</div>
           ) : (
             <div className="space-y-2">
-              {sortedAgents.map((agent: any, index: number) => (
-                <div
-                  key={agent.id}
-                  className="grid grid-cols-12 gap-2 px-3 py-2 bg-card border border-border rounded-md items-center"
-                >
-                  {/* Position */}
-                  <div className="col-span-1 text-xl font-bold text-primary">
-                    {index + 1}
-                  </div>
-
-                  {/* Agent */}
-                  <div className="col-span-5">
-                    <div className="font-medium text-foreground flex items-center gap-2">
-                      {agent.name}
-                      {agent.inPit && (
-                        <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-bold animate-pulse">
-                          PIT
-                        </span>
-                      )}
-                      {agent.drsActive && (
-                        <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
-                          DRS
-                        </span>
-                      )}
-                      {agent.inSlipstream && (
-                        <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
-                          SLIP
-                        </span>
-                      )}
+              {sortedAgents.map((agent: any, index: number) => {
+                const isDnf = raceState?.dnfs?.includes(agent.id)
+                return (
+                  <div
+                    key={agent.id}
+                    className={`grid grid-cols-12 gap-2 px-3 py-2 bg-card border rounded-md items-center ${
+                      isDnf ? 'border-red-500/50 bg-red-500/5' : 'border-border'
+                    }`}
+                  >
+                    {/* Position */}
+                    <div className="col-span-1 text-xl font-bold text-primary">
+                      {isDnf ? '❌' : index + 1}
                     </div>
+
+                    {/* Agent */}
+                    <div className="col-span-5">
+                      <div className="font-medium text-foreground flex items-center gap-2">
+                        {agent.name}
+                        {isDnf && (
+                          <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">
+                            DNF
+                          </span>
+                        )}
+                        {agent.inPit && !isDnf && (
+                          <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-bold animate-pulse">
+                            PIT
+                          </span>
+                        )}
+                        {agent.drsActive && !isDnf && (
+                          <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
+                            DRS
+                          </span>
+                        )}
+                        {agent.inSlipstream && !isDnf && (
+                          <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                            SLIP
+                          </span>
+                        )}
+                      </div>
                     <div className="text-sm text-muted-foreground">
-                      {((agent.speed || 0) * 3.6).toFixed(1)} km/h
+                      {isDnf ? (
+                        <span className="text-red-400 font-medium">Retired</span>
+                      ) : (
+                        `${((agent.speed || 0) * 3.6).toFixed(1)} km/h`
+                      )}
                     </div>
                     <div className="flex gap-2 mt-1 text-xs flex-wrap">
                       <span className="text-muted-foreground">
@@ -147,7 +160,9 @@ export function DataGrid({ raceState }: DataGridProps) {
 
                   {/* Gap */}
                   <div className="col-span-2 text-sm font-medium text-foreground">
-                    {index === 0 ? (
+                    {isDnf ? (
+                      <span className="text-red-400">-</span>
+                    ) : index === 0 ? (
                       <span className="text-green-400">Leader</span>
                     ) : (
                       <span className={agent.gapToAhead > 1.0 ? 'text-orange-400' : 'text-yellow-400'}>
@@ -161,7 +176,8 @@ export function DataGrid({ raceState }: DataGridProps) {
                     {agent.progress?.toFixed(1) || '0.0'}%
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

@@ -69,6 +69,8 @@ export function ControlDeck({
   // Per-agent customization
   const [perAgentCustomize, setPerAgentCustomize] = useState(false)
   const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, {
+    name?: string;
+    number?: number;
     maxSpeed: number;
     acceleration: number;
     dnfProbability: number;
@@ -78,6 +80,35 @@ export function ControlDeck({
     brakeBalance?: number
   }>>({})
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null)
+
+  // Generate random parameters for all agents when numAgents changes
+  useEffect(() => {
+    const generateRandomConfigs = () => {
+      const configs: Record<number, any> = {}
+      const vehicleNames = [
+        'Lightning', 'Thunder', 'Phoenix', 'Viper', 'Falcon',
+        'Dragon', 'Eagle', 'Cobra', 'Raptor', 'Titan',
+        'Storm', 'Blaze', 'Shadow', 'Fury', 'Bolt'
+      ]
+      
+      for (let i = 0; i < numAgents; i++) {
+        configs[i] = {
+          name: vehicleNames[i % vehicleNames.length],
+          number: i + 1,
+          maxSpeed: Math.round((85 + Math.random() * 15) * 10) / 10, // 85-100 m/s
+          acceleration: Math.round((10 + Math.random() * 4) * 10) / 10, // 10-14 m/s²
+          dnfProbability: 2, // 2% default
+          corneringSkill: Math.round((0.8 + Math.random() * 0.8) * 100) / 100, // 0.8-1.6
+          differentialPreload: Math.round(40 + Math.random() * 20), // 40-60 Nm
+          engineBraking: Math.round((0.3 + Math.random() * 0.5) * 100) / 100, // 0.3-0.8
+          brakeBalance: Math.round((0.50 + Math.random() * 0.08) * 100) / 100 // 0.50-0.58
+        }
+      }
+      setPerAgentConfigs(configs)
+    }
+    
+    generateRandomConfigs()
+  }, [numAgents])
 
   // Load circuits from public folder
   useEffect(() => {
@@ -110,8 +141,11 @@ export function ControlDeck({
     }
 
     // Convert per-agent configs to the format expected by RaceConfig
-    const perAgentCfg = perAgentCustomize ? Object.entries(perAgentConfigs).reduce((acc, [idx, cfg]) => {
+    // Always pass the configs (which include random values) unless customize toggle is explicitly on
+    const perAgentCfg = Object.entries(perAgentConfigs).reduce((acc, [idx, cfg]) => {
       acc[parseInt(idx)] = {
+        name: cfg.name,
+        number: cfg.number,
         maxSpeed: cfg.maxSpeed,
         acceleration: cfg.acceleration,
         dnfProbability: cfg.dnfProbability / 100,
@@ -120,7 +154,7 @@ export function ControlDeck({
         brakeBalance: cfg.brakeBalance
       }
       return acc
-    }, {} as Record<number, any>) : undefined
+    }, {} as Record<number, any>)
 
     startRace({
       numAgents,
@@ -494,7 +528,9 @@ export function ControlDeck({
                   onClick={() => setExpandedAgent(expandedAgent === i ? null : i)}
                   className="w-full text-left flex items-center justify-between hover:bg-input/50 p-2 rounded transition-colors"
                 >
-                  <span className="font-medium text-sm">Agent {i + 1}</span>
+                  <span className="font-medium text-sm">
+                    {perAgentConfigs[i]?.name ? `${perAgentConfigs[i].name} #${perAgentConfigs[i]?.number ?? (i + 1)}` : `Agent ${i + 1}`}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {perAgentConfigs[i] ? '✓ Configured' : 'Default'}
                   </span>
@@ -502,6 +538,45 @@ export function ControlDeck({
 
                 {expandedAgent === i && (
                   <div className="space-y-3 mt-3 pt-3 border-t border-border">
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Driver Name
+                        </label>
+                        <input
+                          type="text"
+                          value={perAgentConfigs[i]?.name ?? ''}
+                          placeholder={`Agent ${i + 1}`}
+                          onChange={(e) => {
+                            const newName = e.target.value
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], name: newName }
+                            })
+                          }}
+                          className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Driver Number
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={perAgentConfigs[i]?.number ?? (i + 1)}
+                          onChange={(e) => {
+                            const newNumber = parseInt(e.target.value) || (i + 1)
+                            setPerAgentConfigs({
+                              ...perAgentConfigs,
+                              [i]: { ...perAgentConfigs[i], number: newNumber }
+                            })
+                          }}
+                          className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm"
+                        />
+                      </div>
+                    </div>
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground">

@@ -398,7 +398,7 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-input rounded-md p-3 text-center">
           <div className="text-xs text-muted-foreground mb-1">Simulation Time</div>
-          <div className="text-lg font-bold text-primary">{raceState?.time?.toFixed(1) || '0.0'}s</div>
+          <div className="text-lg font-bold text-primary">{raceState?.simulationTime?.toFixed(1) || '0.0'}s</div>
         </div>
         <div className="bg-input rounded-md p-3 text-center">
           <div className="text-xs text-muted-foreground mb-1">Current Step</div>

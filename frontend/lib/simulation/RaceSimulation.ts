@@ -209,12 +209,17 @@ export class RaceSimulation {
       // Check lap completion
       if (vehicle.justCrossedLine) {
         const lapTime = this.simulationTime - vehicle.lapTimes.reduce((a, b) => a + b, 0)
+        
+        // Scale lap time to match realistic F1 lap times
+        // Typical F1: 70-90s for 5-6km track, simulation produces ~40-60s
+        // Scale factor: 1.4x to bring simulation times closer to reality
+        const scaledLapTime = lapTime * 1.4
 
         // Calculate gaps for telemetry
         const leader = this.vehicles.find(v => v.currentPosition === 1)
         const gapToLeader = leader ? this.simulationTime - (leader.totalTime || 0) : 0
 
-        vehicle.completeLap(lapTime, gapToLeader, vehicle.gapToAhead)
+        vehicle.completeLap(scaledLapTime, gapToLeader, vehicle.gapToAhead)
         
         // Check if pit stop is needed (after crossing line)
         if (vehicle.shouldPitStop(vehicle.lap, this.track.numLaps, this.weather, this.trackWaterLevel)) {
