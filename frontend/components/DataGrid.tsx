@@ -92,7 +92,7 @@ export function DataGrid({ raceState }: DataGridProps) {
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Lap {agent.lap || 0} • {agent.speed?.toFixed(1) || '0.0'} m/s
+                        Lap {agent.lap || 0} • {((agent.speed || 0) * 3.6).toFixed(1)} km/h
                       </div>
                       <div className="flex gap-3 mt-1 text-xs">
                         <span className="text-muted-foreground">
