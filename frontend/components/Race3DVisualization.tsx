@@ -57,7 +57,7 @@ function Scene({ raceState }: { raceState: any }) {
       <Track curve={scaledCurve} />
       
       {raceState.agents.map((agent: any, index: number) => (
-        <Car 
+        <Vehicle 
           key={agent.id} 
           agent={agent} 
           index={index}
@@ -100,29 +100,46 @@ function Track({ curve }: { curve: THREE.CatmullRomCurve3 }) {
   );
 }
 
-// --- Car Component ---
-function Car({ agent, index, curve, trackLength }: { agent: any; index: number; curve: THREE.CatmullRomCurve3; trackLength: number }) {
-  const carRef = useRef<THREE.Group>(null);
-
-  useFrame(() => {
-    if (carRef.current) {
-      const progress = agent.position / trackLength;
-      const point = curve.getPointAt(progress);
-      const tangent = curve.getTangentAt(progress);
-
-      carRef.current.position.lerp(point.clone().setY(0.3), 0.5);
-      carRef.current.lookAt(point.add(tangent));
-    }
-  });
-
-  const color = AGENT_COLORS[index % AGENT_COLORS.length];
-
+// --- Bike Component ---
+function Bike({ color, finished }: { color: string; finished: boolean }) {
   return (
-    <group ref={carRef}>
-      <mesh castShadow>
+    <group position={[0, 0, 0]}>
+      {/* Bike frame */}
+      <mesh castShadow position={[0, 0, 0]}>
+        <boxGeometry args={[0.3, 0.5, 2.2]} />
+        <meshStandardMaterial 
+          color={finished ? '#4ade80' : color}
+          metalness={0.8}
+          roughness={0.2}
+        />
+      </mesh>
+      {/* Front wheel */}
+      <mesh castShadow position={[0, 0.25, -1]}>
+        <cylinderGeometry args={[0.25, 0.25, 0.08, 32]} />
+        <meshStandardMaterial color="#1a1a1a" />
+      </mesh>
+      {/* Rear wheel */}
+      <mesh castShadow position={[0, 0.25, 1]}>
+        <cylinderGeometry args={[0.25, 0.25, 0.08, 32]} />
+        <meshStandardMaterial color="#1a1a1a" />
+      </mesh>
+      {/* Seat */}
+      <mesh castShadow position={[0, 0.6, 0.3]}>
+        <boxGeometry args={[0.2, 0.1, 0.4]} />
+        <meshStandardMaterial color="#000000" />
+      </mesh>
+    </group>
+  );
+}
+
+// --- Car Component ---
+function Car({ color, finished }: { color: string; finished: boolean }) {
+  return (
+    <group position={[0, 0, 0]}>
+      <mesh castShadow position={[0, 0, 0]}>
         <boxGeometry args={[1.5, 0.6, 3]} />
         <meshStandardMaterial 
-          color={agent.finished ? '#4ade80' : color}
+          color={finished ? '#4ade80' : color}
           metalness={0.7}
           roughness={0.3}
         />
@@ -131,6 +148,39 @@ function Car({ agent, index, curve, trackLength }: { agent: any; index: number; 
         <boxGeometry args={[1, 0.4, 1.2]} />
         <meshStandardMaterial color="#000000" />
       </mesh>
+    </group>
+  );
+}
+
+// --- Vehicle Component ---
+function Vehicle({ agent, index, curve, trackLength }: { agent: any; index: number; curve: THREE.CatmullRomCurve3; trackLength: number }) {
+  const vehicleRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (vehicleRef.current) {
+      const progress = Math.max(0, Math.min(1, agent.position / trackLength));
+      const point = curve.getPointAt(progress);
+      const tangent = curve.getTangentAt(progress).normalize();
+
+      // Position vehicle directly on the track
+      vehicleRef.current.position.copy(point.setY(0.3));
+      
+      // Orient vehicle along the track direction
+      const lookAtPoint = point.clone().add(tangent.multiplyScalar(5));
+      lookAtPoint.y = 0.3;
+      vehicleRef.current.lookAt(lookAtPoint);
+    }
+  });
+
+  const color = AGENT_COLORS[index % AGENT_COLORS.length];
+
+  return (
+    <group ref={vehicleRef} position={[0, 0, 0]}>
+      {agent.vehicleType === 'bike' ? (
+        <Bike color={color} finished={agent.finished} />
+      ) : (
+        <Car color={color} finished={agent.finished} />
+      )}
     </group>
   );
 }

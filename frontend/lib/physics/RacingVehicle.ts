@@ -33,6 +33,7 @@ export interface LapTelemetry {
 export interface VehicleConfig {
   id: string
   name: string
+  vehicleType?: 'car' | 'bike'
   maxSpeed: number
   acceleration: number
   brakingRate?: number
@@ -55,6 +56,7 @@ export interface VehicleConfig {
 export interface VehicleState {
   id: string
   name: string
+  vehicleType: 'car' | 'bike'
   position: number
   speed: number
   lap: number
@@ -85,6 +87,7 @@ export class RacingVehicle {
   // Identity
   id: string
   name: string
+  vehicleType: 'car' | 'bike' = 'car'
 
   // Position and motion
   position: number = 0
@@ -215,6 +218,7 @@ export class RacingVehicle {
   constructor(config: VehicleConfig) {
     this.id = config.id
     this.name = config.name
+    this.vehicleType = config.vehicleType || 'car'
     this.maxSpeed = config.maxSpeed
     this.acceleration = config.acceleration
     this.brakingRate = config.brakingRate || 15
@@ -1248,6 +1252,7 @@ export class RacingVehicle {
     return {
       id: this.id,
       name: this.name,
+      vehicleType: this.vehicleType,
       position: this.position,
       speed: this.speed,
       lap: this.lap,
@@ -1273,5 +1278,23 @@ export class RacingVehicle {
       ersHarvestedEnergy: Math.round(this.ersHarvestedEnergy * 100) / 100,
       ersDeployedEnergy: Math.round(this.ersDeployedEnergy * 100) / 100
     }
+  }
+}
+
+export class RacingBike extends RacingVehicle {
+  constructor(config: VehicleConfig) {
+    super(config);
+
+    // Bike-specific physics parameters
+    this.mass = config.mass || 180; // kg (MotoGP bike)
+    this.dragCoefficient = config.dragCoefficient || 0.6;
+    this.frontalArea = config.frontalArea || 0.7; // m²
+    this.downforceCoefficient = config.downforceCoefficient || 0.5; // Bikes have much less downforce
+    this.corneringSkill = config.corneringSkill || 1.5; // Bikes can lean and take corners faster
+
+    // Aliases for calculations
+    this.Cd = this.dragCoefficient;
+    this.A = this.frontalArea;
+    this.Cl = this.downforceCoefficient;
   }
 }

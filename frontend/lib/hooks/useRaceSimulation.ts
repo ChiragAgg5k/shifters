@@ -5,11 +5,12 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { RaceSimulation } from '../simulation/RaceSimulation'
-import { RacingVehicle } from '../physics/RacingVehicle'
+import { RacingVehicle, RacingBike } from '../physics/RacingVehicle'
 import { Track } from '../track/Track'
 import type { SimulationState } from '../simulation/RaceSimulation'
 
 export interface AgentConfig {
+  vehicleType?: 'car' | 'bike'
   maxSpeed?: number
   acceleration?: number
   dnfProbability?: number
@@ -120,9 +121,12 @@ export function useRaceSimulation() {
       const engineBraking = perAgentCfg?.engineBraking ?? globalCfg?.engineBraking ?? 0.5
       const brakeBalance = perAgentCfg?.brakeBalance ?? globalCfg?.brakeBalance ?? 0.54
 
-      const vehicle = new RacingVehicle({
+      const vehicleType = perAgentCfg?.vehicleType ?? globalCfg?.vehicleType ?? 'car'
+
+      const vehicleConfig = {
         id: `vehicle_${i}`,
         name: `${vehicleNames[i % vehicleNames.length]} #${i + 1}`,
+        vehicleType,
         maxSpeed,
         acceleration,
         qualifyingPosition: i + 1,
@@ -131,7 +135,11 @@ export function useRaceSimulation() {
         differentialPreload,
         engineBraking,
         brakeBalance
-      })
+      }
+
+      const vehicle = vehicleType === 'bike'
+        ? new RacingBike(vehicleConfig)
+        : new RacingVehicle(vehicleConfig)
 
       simulation.addVehicle(vehicle)
     }

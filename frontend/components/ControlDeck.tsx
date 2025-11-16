@@ -69,6 +69,7 @@ export function ControlDeck({
   // Per-agent customization
   const [perAgentCustomize, setPerAgentCustomize] = useState(false)
   const [perAgentConfigs, setPerAgentConfigs] = useState<Record<number, {
+    vehicleType?: 'car' | 'bike';
     maxSpeed: number;
     acceleration: number;
     dnfProbability: number;
@@ -112,6 +113,7 @@ export function ControlDeck({
     // Convert per-agent configs to the format expected by RaceConfig
     const perAgentCfg = perAgentCustomize ? Object.entries(perAgentConfigs).reduce((acc, [idx, cfg]) => {
       acc[parseInt(idx)] = {
+        vehicleType: cfg.vehicleType,
         maxSpeed: cfg.maxSpeed,
         acceleration: cfg.acceleration,
         dnfProbability: cfg.dnfProbability / 100,
@@ -487,7 +489,75 @@ export function ControlDeck({
         </div>
 
         {perAgentCustomize && (
-          <div className="space-y-2 bg-input/50 p-4 rounded-md max-h-64 overflow-y-auto">
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => {
+                const newConfigs: Record<number, any> = {}
+                for (let i = 0; i < numAgents; i++) {
+                  newConfigs[i] = {
+                    maxSpeed: perAgentConfigs[i]?.maxSpeed ?? 90,
+                    acceleration: perAgentConfigs[i]?.acceleration ?? 12.5,
+                    dnfProbability: perAgentConfigs[i]?.dnfProbability ?? 2,
+                    corneringSkill: perAgentConfigs[i]?.corneringSkill ?? 1.2,
+                    differentialPreload: perAgentConfigs[i]?.differentialPreload ?? 50,
+                    engineBraking: perAgentConfigs[i]?.engineBraking ?? 0.5,
+                    brakeBalance: perAgentConfigs[i]?.brakeBalance ?? 0.54,
+                    vehicleType: 'car'
+                  }
+                }
+                setPerAgentConfigs(newConfigs)
+              }}
+              className="flex-1 px-3 py-2 bg-primary/20 text-primary border border-primary rounded-md text-sm font-medium hover:bg-primary/30 transition-colors"
+            >
+              🏎️ All Cars
+            </button>
+            <button
+              onClick={() => {
+                const newConfigs: Record<number, any> = {}
+                for (let i = 0; i < numAgents; i++) {
+                  newConfigs[i] = {
+                    maxSpeed: perAgentConfigs[i]?.maxSpeed ?? 90,
+                    acceleration: perAgentConfigs[i]?.acceleration ?? 12.5,
+                    dnfProbability: perAgentConfigs[i]?.dnfProbability ?? 2,
+                    corneringSkill: perAgentConfigs[i]?.corneringSkill ?? 1.2,
+                    differentialPreload: perAgentConfigs[i]?.differentialPreload ?? 50,
+                    engineBraking: perAgentConfigs[i]?.engineBraking ?? 0.5,
+                    brakeBalance: perAgentConfigs[i]?.brakeBalance ?? 0.54,
+                    vehicleType: 'bike'
+                  }
+                }
+                setPerAgentConfigs(newConfigs)
+              }}
+              className="flex-1 px-3 py-2 bg-primary/20 text-primary border border-primary rounded-md text-sm font-medium hover:bg-primary/30 transition-colors"
+            >
+              🏍️ All Bikes
+            </button>
+            <button
+              onClick={() => {
+                const newConfigs: Record<number, any> = {}
+                for (let i = 0; i < numAgents; i++) {
+                  newConfigs[i] = {
+                    maxSpeed: perAgentConfigs[i]?.maxSpeed ?? 90,
+                    acceleration: perAgentConfigs[i]?.acceleration ?? 12.5,
+                    dnfProbability: perAgentConfigs[i]?.dnfProbability ?? 2,
+                    corneringSkill: perAgentConfigs[i]?.corneringSkill ?? 1.2,
+                    differentialPreload: perAgentConfigs[i]?.differentialPreload ?? 50,
+                    engineBraking: perAgentConfigs[i]?.engineBraking ?? 0.5,
+                    brakeBalance: perAgentConfigs[i]?.brakeBalance ?? 0.54,
+                    vehicleType: i % 2 === 0 ? 'car' : 'bike'
+                  }
+                }
+                setPerAgentConfigs(newConfigs)
+              }}
+              className="flex-1 px-3 py-2 bg-accent/20 text-accent border border-accent rounded-md text-sm font-medium hover:bg-accent/30 transition-colors"
+            >
+              🔀 Mixed
+            </button>
+          </div>
+        )}
+
+        {perAgentCustomize && (
+          <div className="space-y-2 bg-input/50 p-4 rounded-md max-h-96 overflow-y-auto">
             {Array.from({ length: numAgents }).map((_, i) => (
               <div key={i} className="border border-border rounded-md p-3">
                 <button
@@ -502,6 +572,25 @@ export function ControlDeck({
 
                 {expandedAgent === i && (
                   <div className="space-y-3 mt-3 pt-3 border-t border-border">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Vehicle Type
+                      </label>
+                      <select
+                        value={perAgentConfigs[i]?.vehicleType ?? 'car'}
+                        onChange={(e) => {
+                          const newType = e.target.value as 'car' | 'bike'
+                          setPerAgentConfigs({
+                            ...perAgentConfigs,
+                            [i]: { ...perAgentConfigs[i], vehicleType: newType }
+                          })
+                        }}
+                        className="w-full px-2 py-1 bg-input border border-border rounded text-sm text-foreground cursor-pointer"
+                      >
+                        <option value="car">🏎️ Car</option>
+                        <option value="bike">🏍️ Bike</option>
+                      </select>
+                    </div>
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground">
@@ -600,7 +689,7 @@ export function ControlDeck({
                       </div>
                     </div>
 
-                    <div className="text-xs text-muted-foreground font-semibold pt-2">Advanced Physics</div>
+                    <div className="text-xs text-muted-foreground font-semibold pt-3 border-t border-border">Advanced Physics</div>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground">
