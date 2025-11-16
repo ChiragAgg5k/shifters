@@ -73,6 +73,12 @@ export interface VehicleState {
   gapToAhead: number // Time gap to car ahead in seconds
   inPit: boolean // Currently in pit lane
   nextPitLap: number // Planned lap for next pit stop
+  // Battery telemetry
+  batteryPower?: number // Current power draw (kW)
+  batteryChargingPower?: number // Energy recovery (kW)
+  batteryTemperature?: number // Battery temp (°C)
+  ersHarvestedEnergy?: number // Total harvested (kWh)
+  ersDeployedEnergy?: number // Total deployed (kWh)
 }
 
 export class RacingVehicle {
@@ -151,7 +157,18 @@ export class RacingVehicle {
   lapPitDuration: number = 0
 
   // Energy and tire management
-  energy: number = 100
+  energy: number = 100 // Battery state of charge (0-100%)
+  maxBatteryCapacity: number = 52.0 // kWh (typical F1 battery)
+  batteryStateOfCharge: number = 100 // Percentage
+  batteryTemperature: number = 25 // °C
+  batteryPower: number = 0 // Current power draw (kW)
+  batteryChargingPower: number = 0 // Energy recovery (kW)
+  
+  // Energy recovery system (ERS)
+  ersHarvestedEnergy: number = 0 // Total harvested this lap (kJ)
+  ersDeployedEnergy: number = 0 // Total deployed this lap (kJ)
+  ersEfficiency: number = 0.85 // 85% efficiency on recovery
+  
   tireWear: number = 0
   tireTemperature: number = 60 // Start with cool tires (realistic warm-up)
   tireCompound: 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet' = 'medium'
@@ -435,13 +452,115 @@ export class RacingVehicle {
       this.justCrossedLine = true
     }
 
-    // Energy consumption
-    const speedFactor = this.speed / this.maxSpeed
-    const accelFactor = Math.abs(this.speed - this.targetSpeed) / this.maxSpeed
-    const dragFactor = dragForce / 1000.0
-
-    const energyConsumption = (speedFactor * 0.01 + accelFactor * 0.005 + dragFactor * 0.002) * timeStep
-    this.energy = Math.max(0, this.energy - energyConsumption)
+    // ===== REALISTIC BATTERY & ENERGY MANAGEMENT =====
+    // F1 2024: 52 kWh battery, ~1100 kW peak power, ~160 kW average consumption
+    
+    // 1. POWER DEMAND CALCULATION
+    let powerDemand = 0 // kW
+    
+    // Base power: proportional to speed (aerodynamic losses)
+    const speedRatio = this.speed / this.maxSpeed
+    const dragPower = (0.5 * this.rho * this.Cd * this.A * Math.pow(this.speed, 3)) / 1000 // Convert to kW
+    powerDemand += dragPower
+    
+    // Acceleration power: P = F * v
+    if (this.speed < this.targetSpeed) {
+      // Accelerating: need to overcome drag + provide acceleration
+      const accelForce = this.mass * this.acceleration
+      const accelPower = (accelForce * this.speed) / 1000 // kW
+      powerDemand += accelPower * 0.8 // 80% efficiency in drivetrain
+    }
+    
+    // Cornering power: lateral forces increase power demand
+    if (this.currentCurvature > 0) {
+      const corneringPower = Math.abs(this.currentCurvature * 100) * speedRatio * 50 // Up to 50 kW in hard corners
+      powerDemand += corneringPower
+    }
+    
+    // DRS deployment increases power demand
+    if (this.drsActive) {
+      powerDemand *= 1.05 // 5% more power to maintain speed with DRS
+    }
+    
+    // 2. ENERGY RECOVERY (REGENERATIVE BRAKING & MGU-K)
+    let recoveredPower = 0 // kW
+    
+    if (this.speed > this.targetSpeed) {
+      // Braking: recover energy through regenerative braking
+      const brakingForce = this.mass * this.brakingRate
+      const brakingPower = (brakingForce * this.speed) / 1000 // kW
+      
+      // Recovery efficiency depends on brake balance and engine braking
+      // More engine braking = more efficient recovery
+      const recoveryEfficiency = this.ersEfficiency * (0.5 + this.engineBraking * 0.5) // 42.5%-85%
+      recoveredPower = brakingPower * recoveryEfficiency
+      
+      // Cap recovery at 120 kW (MGU-K limit)
+      recoveredPower = Math.min(recoveredPower, 120)
+    } else if (this.speed > 0 && this.currentCurvature > 0.01) {
+      // Cornering: recover some energy from lateral forces
+      const corneringForce = this.mass * (this.speed ** 2) * this.currentCurvature
+      const corneringRecovery = (corneringForce * this.speed) / 1000 * 0.1 // 10% of cornering force
+      recoveredPower = Math.min(corneringRecovery, 30) // Cap at 30 kW
+    }
+    
+    // 3. ENGINE BRAKING EFFECT ON POWER DEMAND
+    // Higher engine braking = more deceleration without using brakes
+    // This reduces brake wear but increases energy recovery
+    if (this.speed > this.targetSpeed) {
+      const engineBrakingForce = this.engineBraking * 2.0 // Up to 2.0 m/s² deceleration
+      const engineBrakingPower = (engineBrakingForce * this.mass * this.speed) / 1000
+      
+      // Engine braking reduces actual brake power needed
+      powerDemand -= engineBrakingPower * 0.5 // 50% of engine braking reduces power draw
+      
+      // But engine braking increases energy recovery
+      recoveredPower += engineBrakingPower * 0.3 // 30% of engine braking power recovered
+    }
+    
+    // 4. BATTERY STATE OF CHARGE MANAGEMENT
+    // Net power: positive = discharge, negative = charge
+    const netPower = powerDemand - recoveredPower // kW
+    
+    // Energy change in this timestep (kWh)
+    const energyChange = (netPower * timeStep) / 3600 // Convert kW*s to kWh
+    
+    // Update battery capacity (kWh)
+    const currentBatteryEnergy = (this.batteryStateOfCharge / 100) * this.maxBatteryCapacity
+    const newBatteryEnergy = Math.max(0, Math.min(
+      this.maxBatteryCapacity,
+      currentBatteryEnergy - energyChange
+    ))
+    
+    this.batteryStateOfCharge = (newBatteryEnergy / this.maxBatteryCapacity) * 100
+    this.batteryPower = netPower
+    this.batteryChargingPower = recoveredPower
+    
+    // Track ERS energy for telemetry
+    this.ersHarvestedEnergy += recoveredPower * timeStep / 3600
+    this.ersDeployedEnergy += Math.max(0, powerDemand) * timeStep / 3600
+    
+    // 5. BATTERY TEMPERATURE MANAGEMENT
+    // Battery heats up with high power draw/recovery
+    const powerIntensity = Math.abs(netPower) / 1000 // Normalized 0-1
+    const batteryHeat = powerIntensity * 0.5 * timeStep // Up to 0.5°C/s at max power
+    this.batteryTemperature = Math.min(65, this.batteryTemperature + batteryHeat)
+    
+    // Battery cools naturally
+    const batteryTempDiff = this.batteryTemperature - 25
+    const batteryCooling = batteryTempDiff * 0.02 * timeStep
+    this.batteryTemperature = Math.max(25, this.batteryTemperature - batteryCooling)
+    
+    // 6. PERFORMANCE PENALTY FOR LOW BATTERY
+    // Below 10% SoC: significant power reduction
+    if (this.batteryStateOfCharge < 10) {
+      this.targetSpeed *= 0.7 // 30% speed reduction
+    } else if (this.batteryStateOfCharge < 20) {
+      this.targetSpeed *= 0.85 // 15% speed reduction
+    }
+    
+    // 7. SYNC LEGACY ENERGY VARIABLE (0-100 scale)
+    this.energy = this.batteryStateOfCharge
 
     // Tire wear (cornering, braking, high speed, and dirty air)
     // Base wear rate: ~1% per lap on medium tires in normal conditions
@@ -1059,7 +1178,7 @@ export class RacingVehicle {
       lap: this.lap,
       finished: this.finished,
       totalTime: this.totalTime,
-      energy: Math.round(this.energy * 100) / 100,
+      energy: Math.round(this.batteryStateOfCharge * 100) / 100,
       tireWear: Math.round(this.tireWear * 100) / 100,
       tireTemperature: Math.round(this.tireTemperature * 10) / 10,
       tireCompound: this.tireCompound,
@@ -1069,9 +1188,15 @@ export class RacingVehicle {
       pitStops: this.pitStops,
       currentPosition: this.currentPosition,
       justCrossedLine: this.justCrossedLine,
-      gapToAhead: Math.round(this.gapToAhead * 100) / 100, // Round to 2 decimal places
+      gapToAhead: Math.round(this.gapToAhead * 100) / 100,
       inPit: this.inPit,
-      nextPitLap: this.nextPitLap
+      nextPitLap: this.nextPitLap,
+      // Battery telemetry
+      batteryPower: Math.round(this.batteryPower * 10) / 10,
+      batteryChargingPower: Math.round(this.batteryChargingPower * 10) / 10,
+      batteryTemperature: Math.round(this.batteryTemperature * 10) / 10,
+      ersHarvestedEnergy: Math.round(this.ersHarvestedEnergy * 100) / 100,
+      ersDeployedEnergy: Math.round(this.ersDeployedEnergy * 100) / 100
     }
   }
 }
