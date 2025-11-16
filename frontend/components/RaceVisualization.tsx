@@ -121,64 +121,6 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
       ctx.globalAlpha = 1
     }
 
-    // Draw agents - skip if just crossed finish line to prevent visual jump
-    if (raceState?.safetyCar?.active && raceState?.safetyCar?.position !== undefined) {
-      const scProgress = raceState.safetyCar.position / track.length
-      const distances = [0]
-      for (let i = 1; i < coords.length; i++) {
-        const dx = coords[i].x - coords[i - 1].x
-        const dy = coords[i].y - coords[i - 1].y
-        const segmentDist = Math.sqrt(dx * dx + dy * dy)
-        distances.push(distances[i - 1] + segmentDist)
-      }
-
-      const targetDist = scProgress * distances[distances.length - 1]
-
-      let segmentIndex = 0
-      for (let i = 1; i < distances.length; i++) {
-        if (targetDist <= distances[i]) {
-          segmentIndex = i - 1
-          break
-        }
-      }
-
-      const segStart = distances[segmentIndex]
-      const segEnd = distances[segmentIndex + 1] || distances[segmentIndex]
-      const segProgress = segEnd - segStart > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0
-
-      const coord1 = coords[segmentIndex]
-      const coord2 = coords[(segmentIndex + 1) % coords.length]
-
-      const scX = coord1.x + (coord2.x - coord1.x) * segProgress
-      const scY = coord1.y + (coord2.y - coord1.y) * segProgress
-
-      const transformed = transform({ x: scX, y: scY })
-      
-      // Draw safety car as yellow circle with SC label
-      ctx.fillStyle = '#facc15' // Yellow
-      ctx.beginPath()
-      ctx.arc(transformed.x, transformed.y, 14, 0, Math.PI * 2)
-      ctx.fill()
-      
-      ctx.strokeStyle = '#000000'
-      ctx.lineWidth = 2
-      ctx.stroke()
-      
-      ctx.fillStyle = '#000000'
-      ctx.font = 'bold 10px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText('SC', transformed.x, transformed.y)
-      
-      // Pulsing effect
-      ctx.strokeStyle = '#facc15'
-      ctx.lineWidth = 3
-      ctx.globalAlpha = 0.6
-      ctx.beginPath()
-      ctx.arc(transformed.x, transformed.y, 20, 0, Math.PI * 2)
-      ctx.stroke()
-      ctx.globalAlpha = 1
-    }
 
     // Draw agents - skip if just crossed finish line to prevent visual jump
     agents.forEach((agent, index) => {
@@ -259,6 +201,65 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     }
     ctx.stroke()
     ctx.setLineDash([])
+
+    // Draw safety car if active
+    if (raceState?.safetyCar?.active && raceState?.safetyCar?.position !== undefined) {
+      const scProgress = raceState.safetyCar.position / track.length;
+      const distances = [0];
+      for (let i = 1; i < coords.length; i++) {
+        const dx = coords[i].x - coords[i - 1].x;
+        const dy = coords[i].y - coords[i - 1].y;
+        const segmentDist = Math.sqrt(dx * dx + dy * dy);
+        distances.push(distances[i - 1] + segmentDist);
+      }
+
+      const targetDist = scProgress * distances[distances.length - 1];
+
+      let segmentIndex = 0;
+      for (let i = 1; i < distances.length; i++) {
+        if (targetDist <= distances[i]) {
+          segmentIndex = i - 1;
+          break;
+        }
+      }
+
+      const segStart = distances[segmentIndex];
+      const segEnd = distances[segmentIndex + 1] || distances[segmentIndex];
+      const segProgress = segEnd - segStart > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0;
+
+      const coord1 = coords[segmentIndex];
+      const coord2 = coords[(segmentIndex + 1) % coords.length];
+
+      const scX = coord1.x + (coord2.x - coord1.x) * segProgress;
+      const scY = coord1.y + (coord2.y - coord1.y) * segProgress;
+
+      const transformed = transform({ x: scX, y: scY });
+      
+      // Draw safety car as yellow circle with SC label
+      ctx.fillStyle = '#facc15'; // Yellow
+      ctx.beginPath();
+      ctx.arc(transformed.x, transformed.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SC', transformed.x, transformed.y);
+      
+      // Pulsing effect
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.arc(transformed.x, transformed.y, 20, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // Draw start/finish line
     if (transformedCoords.length > 0) {

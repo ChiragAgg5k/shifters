@@ -27,6 +27,7 @@ export interface SimulationState {
   safetyCar?: {
     active: boolean
     duration: number
+    position: number
   }
   dnfs?: string[]
 }
