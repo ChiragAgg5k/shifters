@@ -346,8 +346,8 @@ export function ControlDeck({
               <input
                 type="range"
                 min="0"
-                max="100"
-                step="1"
+                max="10"
+                step="0.5"
                 value={agentDnfProbability}
                 onChange={(e) => {
                   const newDnf = parseFloat(e.target.value)
@@ -361,7 +361,7 @@ export function ControlDeck({
                 }}
                 className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
               />
-              <div className="text-xs text-muted-foreground text-center">0 - 100%</div>
+              <div className="text-xs text-muted-foreground text-center">0 - 10%</div>
             </div>
 
             <div className="space-y-2">
