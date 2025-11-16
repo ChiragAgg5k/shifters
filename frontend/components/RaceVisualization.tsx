@@ -88,6 +88,98 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
     ctx.lineTo(startX + 30, startY)
     ctx.stroke()
 
+    // Draw safety car if active
+    if (raceState?.safetyCar?.active && raceState?.safetyCar?.position !== undefined) {
+      const scProgress = raceState.safetyCar.position / trackLength
+      const scAngle = startAngle + scProgress * 2 * Math.PI
+      const scX = centerX + radius * Math.cos(scAngle)
+      const scY = centerY + radius * Math.sin(scAngle)
+      
+      // Draw safety car as yellow circle with SC label
+      ctx.fillStyle = '#facc15' // Yellow
+      ctx.beginPath()
+      ctx.arc(scX, scY, 14, 0, Math.PI * 2)
+      ctx.fill()
+      
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 2
+      ctx.stroke()
+      
+      ctx.fillStyle = '#000000'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('SC', scX, scY)
+      
+      // Pulsing effect
+      ctx.strokeStyle = '#facc15'
+      ctx.lineWidth = 3
+      ctx.globalAlpha = 0.6
+      ctx.beginPath()
+      ctx.arc(scX, scY, 20, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
+
+    // Draw agents - skip if just crossed finish line to prevent visual jump
+    if (raceState?.safetyCar?.active && raceState?.safetyCar?.position !== undefined) {
+      const scProgress = raceState.safetyCar.position / track.length
+      const distances = [0]
+      for (let i = 1; i < coords.length; i++) {
+        const dx = coords[i].x - coords[i - 1].x
+        const dy = coords[i].y - coords[i - 1].y
+        const segmentDist = Math.sqrt(dx * dx + dy * dy)
+        distances.push(distances[i - 1] + segmentDist)
+      }
+
+      const targetDist = scProgress * distances[distances.length - 1]
+
+      let segmentIndex = 0
+      for (let i = 1; i < distances.length; i++) {
+        if (targetDist <= distances[i]) {
+          segmentIndex = i - 1
+          break
+        }
+      }
+
+      const segStart = distances[segmentIndex]
+      const segEnd = distances[segmentIndex + 1] || distances[segmentIndex]
+      const segProgress = segEnd - segStart > 0 ? (targetDist - segStart) / (segEnd - segStart) : 0
+
+      const coord1 = coords[segmentIndex]
+      const coord2 = coords[(segmentIndex + 1) % coords.length]
+
+      const scX = coord1.x + (coord2.x - coord1.x) * segProgress
+      const scY = coord1.y + (coord2.y - coord1.y) * segProgress
+
+      const transformed = transform({ x: scX, y: scY })
+      
+      // Draw safety car as yellow circle with SC label
+      ctx.fillStyle = '#facc15' // Yellow
+      ctx.beginPath()
+      ctx.arc(transformed.x, transformed.y, 14, 0, Math.PI * 2)
+      ctx.fill()
+      
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 2
+      ctx.stroke()
+      
+      ctx.fillStyle = '#000000'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('SC', transformed.x, transformed.y)
+      
+      // Pulsing effect
+      ctx.strokeStyle = '#facc15'
+      ctx.lineWidth = 3
+      ctx.globalAlpha = 0.6
+      ctx.beginPath()
+      ctx.arc(transformed.x, transformed.y, 20, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
+
     // Draw agents - skip if just crossed finish line to prevent visual jump
     agents.forEach((agent, index) => {
       // Skip this agent if it just crossed the finish line
@@ -285,7 +377,17 @@ export function RaceVisualization({ raceState }: RaceVisualizationProps) {
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+    <div className="bg-card border border-border rounded-lg p-6 space-y-4 relative">
+      {/* Rain Indicator */}
+      {raceState?.environment?.weather === 'rain' && (
+        <div className="absolute top-0 left-0 right-0 bg-blue-500/20 border-2 border-blue-500 rounded-t-lg p-3 animate-pulse">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-2xl">🌧️</span>
+            <span className="font-bold text-blue-300 text-lg">RAIN - Reduced Grip</span>
+            <span className="text-2xl">🌧️</span>
+          </div>
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         width={800}

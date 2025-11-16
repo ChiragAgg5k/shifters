@@ -236,9 +236,9 @@ export class RacingVehicle {
 
   /**
    * Calculate target speed based on track curvature, weather, and vehicle state
-   * Enhanced with proper force balance and load-sensitive tire model
+   * Now includes track water level for realistic wet tire performance
    */
-  calculateTargetSpeed(curvature: number, weather: string, _trackTemp: number): void {
+  calculateTargetSpeed(curvature: number, weather: string, _trackTemp: number, trackWaterLevel: number = 0): void {
     this.currentCurvature = curvature
 
     // Calculate downforce at current speed
@@ -282,10 +282,42 @@ export class RacingVehicle {
 
     // Weather effects on grip
     let gripMultiplier = 1.0
-    if (weather === 'rain') {
-      gripMultiplier = 0.7 // 30% less grip in rain
-    } else if (weather === 'wet') {
-      gripMultiplier = 0.85 // 15% less grip on wet track
+    
+    // Calculate grip based on track water level and tire compound
+    if (trackWaterLevel > 0) {
+      // Track has water - tire performance depends on compound
+      if (this.tireCompound === 'wet') {
+        // Full wets: Best in heavy water (>70%), decent in light water
+        if (trackWaterLevel > 70) {
+          gripMultiplier = 1.0 // Optimal
+        } else if (trackWaterLevel > 30) {
+          gripMultiplier = 0.85 // Still good
+        } else {
+          gripMultiplier = 0.65 // Too much grip = overheating on drying track
+        }
+      } else if (this.tireCompound === 'intermediate') {
+        // Inters: Best in light-medium water (30-70%)
+        if (trackWaterLevel > 70) {
+          gripMultiplier = 0.75 // Not enough tread for heavy water
+        } else if (trackWaterLevel > 20) {
+          gripMultiplier = 0.95 // Optimal range
+        } else {
+          gripMultiplier = 0.80 // OK on drying track
+        }
+      } else {
+        // Slicks (soft/medium/hard): Lose performance with water
+        const waterPenalty = trackWaterLevel / 100
+        gripMultiplier = 1.0 - (waterPenalty * 0.6) // Up to 60% grip loss in standing water
+      }
+    } else {
+      // Dry track
+      if (this.tireCompound === 'wet') {
+        gripMultiplier = 0.50 // Full wets terrible on dry
+      } else if (this.tireCompound === 'intermediate') {
+        gripMultiplier = 0.75 // Inters poor on dry
+      } else {
+        gripMultiplier = 1.0 // Slicks optimal on dry
+      }
     }
 
     // Tire temperature effects (optimal: 80-100°C) - DISCRETE thresholds like Python
@@ -649,9 +681,27 @@ export class RacingVehicle {
   /**
    * Check if pit stop is needed
    */
-  shouldPitStop(currentLap: number, totalLaps: number): boolean {
+  shouldPitStop(currentLap: number, totalLaps: number, weather: string = 'clear', trackWaterLevel: number = 0): boolean {
     // Don't pit on first lap or last 2 laps
     if (currentLap <= 1 || currentLap >= totalLaps - 1) return false
+
+    // Emergency pit for weather: wrong tires for track conditions
+    if (trackWaterLevel > 70) {
+      // Heavy water - need full wets
+      if (this.tireCompound !== 'wet') {
+        return true
+      }
+    } else if (trackWaterLevel > 20) {
+      // Light-medium water - intermediates ideal
+      if (this.tireCompound !== 'intermediate') {
+        return true
+      }
+    } else if (trackWaterLevel < 5) {
+      // Nearly dry - switch to slicks
+      if (this.tireCompound === 'intermediate' || this.tireCompound === 'wet') {
+        return true
+      }
+    }
 
     // Pit if tire wear is critical (>85%)
     if (this.tireWear > 85) return true
@@ -673,9 +723,19 @@ export class RacingVehicle {
   }
 
   /**
-   * Choose next tire compound based on strategy
+   * Choose next tire compound based on strategy, weather, and track water level
    */
-  getNextTireCompound(): 'soft' | 'medium' | 'hard' {
+  getNextTireCompound(weather: string = 'clear', trackWaterLevel: number = 0): 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet' {
+    // Track water level determines tire choice
+    if (trackWaterLevel > 70) {
+      // Heavy water - full wets needed
+      return 'wet'
+    } else if (trackWaterLevel > 20) {
+      // Light-medium water - intermediates optimal
+      return 'intermediate'
+    }
+
+    // Dry or nearly dry - use slicks
     const stopIndex = this.pitStops
 
     // If we have a strategy, follow it

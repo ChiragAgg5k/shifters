@@ -47,12 +47,20 @@ export class RaceSimulation {
   safetyCarActive: boolean = false
   safetyCarDuration: number = 0
   safetyCarLapsRemaining: number = 0
+  safetyCarPosition: number = 0 // Position on track
 
   // DNFs
   dnfVehicles: Set<string> = new Set()
 
   // Race report data
   raceReportData: any = null
+
+  // Weather dynamics
+  rainProbability: number = 0.0
+  lastWeatherCheckLap: number = -1
+  trackWaterLevel: number = 0.0 // 0-100%, affects tire performance
+  waterAccumulationRate: number = 2.0 // % per simulation step in rain
+  waterDryingRate: number = 0.5 // % per simulation step in dry
 
   constructor(config: SimulationConfig) {
     this.track = config.track
@@ -110,6 +118,14 @@ export class RaceSimulation {
     // Update safety car
     if (this.safetyCarActive) {
       this.safetyCarLapsRemaining -= this.timeStep / 60 // Rough lap time estimate
+      
+      // Safety car moves at constant speed (40 m/s)
+      const safetyCarSpeed = 40
+      this.safetyCarPosition += safetyCarSpeed * this.timeStep
+      if (this.safetyCarPosition >= this.track.length) {
+        this.safetyCarPosition = this.safetyCarPosition % this.track.length
+      }
+      
       if (this.safetyCarLapsRemaining <= 0) {
         this.safetyCarActive = false
         console.log('🟢 Safety car returning to pits')
@@ -120,15 +136,50 @@ export class RaceSimulation {
     for (const vehicle of this.vehicles) {
       if (vehicle.finished || this.dnfVehicles.has(vehicle.id)) continue
 
+      // Update track water level based on weather
+      if (this.weather === 'rain') {
+        // Water accumulates during rain
+        this.trackWaterLevel = Math.min(100, this.trackWaterLevel + this.waterAccumulationRate * this.timeStep)
+      } else {
+        // Track dries when not raining
+        this.trackWaterLevel = Math.max(0, this.trackWaterLevel - this.waterDryingRate * this.timeStep)
+      }
+
       // Get track curvature at current position
       const curvature = this.track.getCurvature(vehicle.position)
 
       // Calculate target speed BEFORE moving
-      vehicle.calculateTargetSpeed(curvature, this.weather, this.temperature)
+      vehicle.calculateTargetSpeed(curvature, this.weather, this.temperature, this.trackWaterLevel)
 
       // Safety car limits speed
       if (this.safetyCarActive) {
         vehicle.targetSpeed = Math.min(vehicle.targetSpeed, 40) // 40 m/s under safety car
+        
+        // Bunch up cars behind safety car
+        // Calculate gap to car ahead (considering SC position)
+        const sortedVehicles = [...this.vehicles]
+          .filter(v => !v.finished && !this.dnfVehicles.has(v.id))
+          .sort((a, b) => {
+            const progressA = a.lap * this.track.length + a.position
+            const progressB = b.lap * this.track.length + b.position
+            return progressB - progressA
+          })
+        
+        const vehicleIndex = sortedVehicles.findIndex(v => v.id === vehicle.id)
+        if (vehicleIndex > 0) {
+          const carAhead = sortedVehicles[vehicleIndex - 1]
+          const gapToAhead = (carAhead.position - vehicle.position + this.track.length) % this.track.length
+          
+          // Maintain 30-50m gap under safety car
+          const targetGap = 40
+          if (gapToAhead < targetGap - 10) {
+            // Too close - slow down more
+            vehicle.targetSpeed = Math.min(vehicle.targetSpeed, 35)
+          } else if (gapToAhead > targetGap + 20) {
+            // Too far - catch up slightly
+            vehicle.targetSpeed = Math.min(45, vehicle.targetSpeed)
+          }
+        }
       }
 
       // Check slipstream
@@ -163,16 +214,14 @@ export class RaceSimulation {
         const gapToLeader = leader ? this.simulationTime - (leader.totalTime || 0) : 0
 
         vehicle.completeLap(lapTime, gapToLeader, vehicle.gapToAhead)
-
+        
         // Check if pit stop is needed (after crossing line)
-        if (vehicle.shouldPitStop(vehicle.lap, this.track.numLaps)) {
-          const nextCompound = vehicle.getNextTireCompound()
+        if (vehicle.shouldPitStop(vehicle.lap, this.track.numLaps, this.weather, this.trackWaterLevel)) {
+          const nextCompound = vehicle.getNextTireCompound(this.weather, this.trackWaterLevel)
           const pitDuration = vehicle.pitStop(nextCompound)
           vehicle.lapPitStop = true
           vehicle.lapPitDuration = pitDuration
-        }
-
-        // Check if finished race (after completing the lap)
+        }        // Check if finished race (after completing the lap)
         if (vehicle.lap >= this.track.numLaps) {
           vehicle.finished = true
           console.log(`🏁 ${vehicle.name} finished in position ${this.getFinishedCount()}`)
@@ -183,10 +232,11 @@ export class RaceSimulation {
       if (vehicle.lap > vehicle.lastDnfCheckLap && vehicle.lap > 0) {
         vehicle.lastDnfCheckLap = vehicle.lap
 
-        const dnfChance = vehicle.dnfProbability / Math.max(this.track.numLaps, 1)
+        // DNF probability is now per-lap chance directly (not divided by num laps)
+        const dnfChance = vehicle.dnfProbability
         if (Math.random() < dnfChance) {
           this.dnfVehicles.add(vehicle.id)
-          console.log(`❌ DNF: ${vehicle.name} on lap ${vehicle.lap}`)
+          console.log(`❌ DNF: ${vehicle.name} on lap ${vehicle.lap} (DNF probability: ${(dnfChance * 100).toFixed(1)}%)`)
 
           // 30% chance of safety car
           if (Math.random() < 0.3 && !this.safetyCarActive) {
@@ -198,6 +248,26 @@ export class RaceSimulation {
 
     // Update positions
     this.updatePositions()
+
+    // Dynamic weather check (every lap for lead vehicle)
+    if (this.currentLap > this.lastWeatherCheckLap && this.currentLap > 0) {
+      this.lastWeatherCheckLap = this.currentLap
+      
+      // Check if weather should change based on rain probability
+      if (Math.random() < this.rainProbability) {
+        // Transition to rain
+        if (this.weather === 'clear') {
+          this.weather = 'rain'
+          console.log(`🌧️ Weather change: Rain started on lap ${this.currentLap}`)
+        }
+      } else {
+        // Transition to clear
+        if (this.weather === 'rain') {
+          this.weather = 'clear'
+          console.log(`☀️ Weather change: Rain stopped on lap ${this.currentLap}`)
+        }
+      }
+    }
 
     // Check if race is complete
     const activeVehicles = this.vehicles.filter(v => !v.finished && !this.dnfVehicles.has(v.id))
@@ -221,6 +291,23 @@ export class RaceSimulation {
     this.safetyCarActive = true
     this.safetyCarLapsRemaining = 3 // 3 laps under safety car
     this.safetyCarDuration = 3
+    
+    // Position safety car ahead of leader
+    const leader = this.vehicles
+      .filter(v => !v.finished && !this.dnfVehicles.has(v.id))
+      .sort((a, b) => {
+        const progressA = a.lap * this.track.length + a.position
+        const progressB = b.lap * this.track.length + b.position
+        return progressB - progressA
+      })[0]
+    
+    if (leader) {
+      // Start SC 100m ahead of leader
+      this.safetyCarPosition = (leader.position + 100) % this.track.length
+    } else {
+      this.safetyCarPosition = 0
+    }
+    
     console.log('🟡 Safety car deployed!')
   }
 
@@ -341,12 +428,14 @@ export class RaceSimulation {
       environment: {
         track: this.track.getInfo(),
         weather: this.weather,
-        temperature: this.temperature
+        temperature: this.temperature,
+        trackWaterLevel: Math.round(this.trackWaterLevel)
       },
       currentLap: this.currentLap,
       safetyCar: {
         active: this.safetyCarActive,
-        duration: this.safetyCarLapsRemaining
+        duration: this.safetyCarLapsRemaining,
+        position: this.safetyCarPosition
       },
       dnfs: Array.from(this.dnfVehicles),
       raceReport: this.raceReportData
@@ -357,6 +446,11 @@ export class RaceSimulation {
   updateWeather(newWeather: string): void {
     this.weather = newWeather
     console.log(`🌦️ Weather updated to: ${newWeather}`)
+  }
+
+  updateRainProbability(probability: number): void {
+    this.rainProbability = probability
+    console.log(`🌧️ Rain probability updated to: ${(probability * 100).toFixed(0)}%`)
   }
 
   updateTemperature(newTemperature: number): void {

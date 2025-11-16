@@ -71,7 +71,7 @@ export function useRaceSimulation() {
     // Stop any existing simulation
     stopRace()
 
-    // Determine weather
+    // Determine initial weather
     const weather = Math.random() < config.rainProbability ? 'rain' : 'clear'
 
     // Create track from GeoJSON
@@ -135,6 +135,9 @@ export function useRaceSimulation() {
 
       simulation.addVehicle(vehicle)
     }
+
+    // Set initial rain probability
+    simulation.rainProbability = config.rainProbability
 
     // Start simulation
     simulation.start()
@@ -220,9 +223,7 @@ export function useRaceSimulation() {
    */
   const updateRainProbability = useCallback((probability: number) => {
     if (simulationRef.current) {
-      // Determine weather based on probability
-      const weather = Math.random() < probability ? 'rain' : 'clear'
-      simulationRef.current.weather = weather
+      simulationRef.current.updateRainProbability(probability)
     }
   }, [])
 
