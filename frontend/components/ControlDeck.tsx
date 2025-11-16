@@ -479,8 +479,7 @@ export function ControlDeck({
             id="customize-per-agent"
             checked={perAgentCustomize}
             onChange={(e) => setPerAgentCustomize(e.target.checked)}
-            disabled={raceActive}
-            className="w-4 h-4 rounded border-border cursor-pointer disabled:opacity-50"
+            className="w-4 h-4 rounded border-border cursor-pointer"
           />
           <label htmlFor="customize-per-agent" className="text-sm font-medium text-muted-foreground cursor-pointer">
             Customize Each Agent Individually
