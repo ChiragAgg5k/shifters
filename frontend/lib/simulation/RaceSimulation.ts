@@ -242,11 +242,12 @@ export class RaceSimulation {
       if (vehicle.lap > vehicle.lastDnfCheckLap && vehicle.lap > 0) {
         vehicle.lastDnfCheckLap = vehicle.lap
 
-        // DNF probability is now per-lap chance directly (not divided by num laps)
-        const dnfChance = vehicle.dnfProbability
-        if (Math.random() < dnfChance) {
+        // Convert total race DNF probability to per-lap probability
+        // If user sets 2%, that means 2% chance over the entire race, not per lap
+        const perLapDnfChance = vehicle.dnfProbability / this.track.numLaps
+        if (Math.random() < perLapDnfChance) {
           this.dnfVehicles.add(vehicle.id)
-          console.log(`❌ DNF: ${vehicle.name} on lap ${vehicle.lap} (DNF probability: ${(dnfChance * 100).toFixed(1)}%)`)
+          console.log(`❌ DNF: ${vehicle.name} on lap ${vehicle.lap} (Total race DNF probability: ${(vehicle.dnfProbability * 100).toFixed(1)}%)`)
 
           // 30% chance of safety car
           if (Math.random() < 0.3 && !this.safetyCarActive) {

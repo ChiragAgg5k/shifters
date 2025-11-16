@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { RaceVisualization } from '@/components/RaceVisualization'
 import { ControlDeck } from '@/components/ControlDeck'
 import { DataGrid } from '@/components/DataGrid'
 import { RaceReport } from '@/components/RaceReport'
 import { useRaceSimulation } from '@/lib/hooks/useRaceSimulation'
+import { Gamepad2, Brain } from 'lucide-react'
 
 // Dynamically import 3D visualization to avoid SSR issues with Three.js
 const Race3DVisualization = dynamic(
@@ -49,13 +51,31 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">🏎️ F1 Race Simulator</h1>
-          <p className="text-muted-foreground">Real-time F1 racing with advanced physics and strategy</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-primary mb-2">🏎️ F1 Race Simulator</h1>
+            <p className="text-muted-foreground">Real-time F1 racing with advanced physics and strategy</p>
+          </div>
+          <div className="flex gap-3">
+            <Link 
+              href="/player"
+              className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-md font-medium hover:bg-accent/90 transition-colors"
+            >
+              <Gamepad2 size={18} />
+              Player Mode
+            </Link>
+            <Link 
+              href="/optimize"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md font-medium hover:bg-purple-700 transition-colors"
+            >
+              <Brain size={18} />
+              ML Optimizer
+            </Link>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="lg:col-span-1 space-y-4">
             {/* View Toggle */}
             <div className="flex justify-end">
               <button
