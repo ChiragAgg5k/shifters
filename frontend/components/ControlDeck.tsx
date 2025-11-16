@@ -280,8 +280,7 @@ export function ControlDeck({
             id="customize-agents"
             checked={customizeAgents}
             onChange={(e) => setCustomizeAgents(e.target.checked)}
-            disabled={raceActive}
-            className="w-4 h-4 rounded border-border cursor-pointer disabled:opacity-50"
+            className="w-4 h-4 rounded border-border cursor-pointer"
           />
           <label htmlFor="customize-agents" className="text-sm font-medium text-muted-foreground cursor-pointer">
             Customize Agent Performance
