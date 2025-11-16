@@ -1,241 +1,292 @@
-# Shifters - Competitive Mobility Systems Simulator
+# Shifters - F1 Race Simulator
 
-A lightweight mobility event simulator that models many moving agents, events, and outputs a live leaderboard.
+An advanced F1 racing simulation platform with realistic physics, real-time 3D visualization, and comprehensive telemetry analysis. Built with TypeScript/React frontend.
 
-## Applications
+![Platform](https://img.shields.io/badge/platform-electron-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-success)
 
-- Formula E racing
-- MotoGP racing
-- Drone racing
-- Supply-chain races
-- Traffic flow management
-- Any competitive mobility scenario
+## Quick Start
 
-## Features
+```bash
+cd frontend
+pnpm install
+pnpm dev          # Web version at localhost:3000
+pnpm electron:dev # Desktop app
+```
 
-- **Agent-Based Modeling**: Each agent (vehicle, drone, etc.) has independent properties and decision logic
-- **Discrete Event Simulation**: Efficient state changes over time
-- **Live Leaderboard**: Real-time ranking updates with efficient sorted data structures
-- **Web-Based Visualization**: Real-time race visualization with WebSocket updates
-- **Flexible Environments**: Customizable tracks and scenarios
-- **Event System**: Trigger callbacks for laps, checkpoints, finishes, etc.
-- **Pre-configured Scenarios**: Formula E, MotoGP, drones, supply chain, and traffic flow
-- **Dual UI Options**: Custom WebSocket UI or Mesa-native Solara interface
+**That's it!** Select a circuit, configure race parameters, and hit "Start Race" to see the F1 simulation in action.
+
+## Table of Contents
+
+- [Current Status](#current-status)
+- [Key Features](#key-features)
+- [Installation & Quick Start](#installation--quick-start)
+- [Available F1 Circuits](#available-f1-circuits-2024-season)
+- [Technical Architecture](#technical-architecture)
+- [Physics Highlights](#physics-highlights)
+- [Roadmap](#roadmap)
+- [Development](#development)
+- [Tech Stack](#tech-stack)
+- [Contributing](#contributing)
+
+## Current Status
+
+**🎮 Frontend (Next.js + Three.js)** - Fully Functional Electron App
+- ✅ Real-time 3D race visualization with Three.js
+- ✅ 2D race track visualization with SVG
+- ✅ Advanced physics simulation engine (differential, brake balance, engine braking)
+- ✅ Per-vehicle customization (cars/bikes with individual parameters)
+- ✅ Dynamic weather system (rain probability, track water level)
+- ✅ Safety car deployment
+- ✅ DNF (Did Not Finish) system
+- ✅ Pit stop strategy simulation
+- ✅ Live leaderboard with real-time telemetry
+- ✅ Post-race comprehensive reports with Recharts
+- ✅ 22 authentic F1 2024 circuits from real GPS data
+- ✅ Electron desktop application (macOS/Windows/Linux)
+
+**🏎️ Key Features**
+
+- **Advanced Physics**: Realistic racing dynamics including tire wear, energy management, DRS, slipstream effects
+- **Vehicle Types**: Support for both F1 cars and bikes with different 3D models
+- **Real-Time Controls**: Adjust simulation speed, track temperature, weather, and vehicle parameters during race
+- **Telemetry Analytics**: Track tire wear, speed, energy consumption, and tire temperature lap-by-lap
+- **Strategic Depth**: Pit stop optimization, tire compound selection, fuel/energy management
+- **3D Visualization**: Dynamic camera controls, authentic track rendering, vehicle positioning
 
 ## Project Structure
 
 ```
 shifters/
-├── agents/          # Agent classes (vehicles, drones, etc.)
-├── environment/     # Track and environment representation
-├── simcore/         # Simulation engine and event loop
-├── leaderboard/     # Real-time ranking system
-├── ui/              # Web visualization (FastAPI + WebSocket + Mesa/Solara)
-├── config/          # Scenario configurations
-└── cli.py           # Command-line interface
+├── frontend/                      # Next.js + React + Three.js Application
+│   ├── app/                      # Next.js app directory
+│   │   ├── page.tsx             # Main race interface
+│   │   └── layout.tsx           # App layout
+│   ├── components/               # React components
+│   │   ├── ControlDeck.tsx      # Race controls and configuration
+│   │   ├── Race3DVisualization.tsx  # Three.js 3D rendering
+│   │   ├── RaceVisualization.tsx    # 2D SVG visualization
+│   │   ├── DataGrid.tsx         # Live leaderboard
+│   │   ├── RaceReport.tsx       # Post-race analytics
+│   │   └── ConnectionStatus.tsx # Connection indicator
+│   ├── lib/                      # Core simulation logic
+│   │   ├── simulation/          # Race simulation engine
+│   │   ├── physics/             # Vehicle physics and dynamics
+│   │   ├── track/               # Track management and curvature
+│   │   └── hooks/               # React hooks
+│   ├── public/data/circuits/    # F1 2024 circuit GPS data
+│   ├── electron/                # Electron main process
+│   └── package.json             # Dependencies and scripts
+│
+└── (Python backend - legacy/deprecated)
 ```
 
-## Installation
+## Installation & Quick Start
 
-This project uses `uv` for Python environment management.
+### Prerequisites
+- Node.js 18+ and pnpm (for frontend)
+- Electron support for desktop app
+
+### Frontend Setup
 
 ```bash
+# Navigate to frontend directory
+cd frontend
+
 # Install dependencies
-uv sync
+pnpm install
+
+# Development mode (web browser)
+pnpm dev
+# Opens at http://localhost:3000
+
+# Electron desktop app (development)
+pnpm electron:dev
+
+# Build Electron app for production
+pnpm electron:build:mac    # macOS
+pnpm electron:build:win    # Windows
+pnpm electron:build:linux  # Linux
 ```
 
-## Quick Start
+### Running Your First Race
 
-### Option 1: Web Visualization (Recommended)
+1. **Configure Race Parameters**:
+   - Number of agents (2-20 vehicles)
+   - Number of laps (1-100)
+   - Select circuit from 22 F1 2024 tracks
+   - Adjust track temperature (10-60°C)
+   - Set rain probability (0-100%)
+   - Choose simulation speed (0.5x - 10x)
 
-```bash
-# Start the web visualization server
-uv run python run_visualization.py
+2. **Customize Vehicle Performance** (Optional):
+   - Global settings: Max speed, acceleration, DNF probability, cornering skill
+   - Advanced physics: Differential preload, engine braking, brake balance
+   - Per-vehicle customization: Set individual parameters for each agent
+   - Vehicle type selection: Choose between F1 cars and bikes
 
-# Then open your browser to: http://localhost:8000
-# Configure race parameters in the UI and click "Start Race"
-```
+3. **Start Race**: Click "Start Race" and watch the action unfold in real-time
 
-### Option 2: Command Line
+4. **View Results**: After the race, review comprehensive telemetry data and final classification
 
-```bash
-# Basic race with 5 agents
-uv run python -m shifters.cli
+### Available F1 Circuits (2024 Season)
 
-# Customize the race
-uv run python -m shifters.cli -n 10 --laps 5 --track-length 2000
+Monaco, Bahrain, Saudi Arabia, Australia, Japan, China, Miami, Imola, Monaco, Canada, Spain, Austria, Great Britain, Hungary, Belgium, Netherlands, Italy, Azerbaijan, Singapore, USA, Mexico, Brazil, Las Vegas, Abu Dhabi
 
-# Run without live leaderboard updates
-uv run python -m shifters.cli --no-leaderboard
-```
+## Technical Architecture
 
-### Option 3: Mesa-Native Visualization
+### Core Simulation (`frontend/lib/simulation/`)
+- **RaceSimulation.ts**: Main simulation engine with discrete time-stepping
+- Physics updates at configurable intervals (default: 0.1s steps)
+- Safety car deployment logic with automatic trigger on DNF events
+- Dynamic weather transitions based on rain probability
+- Position tracking and gap calculations
 
-```bash
-# Use Mesa's Solara interface
-uv run python run_visualization.py --mesa
+### Physics Engine (`frontend/lib/physics/`)
+- **RacingVehicle.ts**: Advanced vehicle physics simulation
+  - Tire wear degradation based on speed, temperature, and cornering
+  - Energy management with consumption modeling
+  - DRS (Drag Reduction System) activation on straights
+  - Slipstream effect when following other vehicles
+  - Brake balance and differential preload impact on cornering
+  - Engine braking simulation
+  - Weather-dependent grip levels
 
-# Opens at: http://localhost:8765
-```
+### Track System (`frontend/lib/track/`)
+- **Track.ts**: Circuit representation with GPS coordinate parsing
+- Curvature calculation using finite differences
+- Support for 22 real F1 2024 circuits
+- Track length and segment analysis
 
-📖 **See [UI_GUIDE.md](UI_GUIDE.md) for complete visualization documentation**
+### Visualization
+- **3D Rendering**: Three.js with OrbitControls for camera manipulation
+- **2D Rendering**: SVG-based track visualization with real-time position updates
+- **Responsive Design**: Tailwind CSS with custom dark theme
 
-### CLI Options
+## Physics Highlights
 
-- `-n, --num-agents`: Number of racing agents (default: 5)
-- `-l, --track-length`: Track length in meters (default: 1000.0)
-- `--laps`: Number of laps (default: 3)
-- `--max-steps`: Maximum simulation steps (default: unlimited)
-- `--no-leaderboard`: Disable live leaderboard display
+### Tire Dynamics
+- Compound-specific wear rates (Soft/Medium/Hard)
+- Temperature management (optimal window: 80-100°C)
+- Rain tire automatic switching based on track water level
+- Degradation affects grip and cornering speed
 
-## Usage Examples
+### Energy System
+- Battery/fuel consumption based on throttle and speed
+- Regenerative braking under deceleration
+- Strategic energy management for race finish
 
-### Basic Simulation
-
-```python
-from shifters.agents.base_agent import RacingVehicle
-from shifters.environment.track import Track
-from shifters.simcore.simulator import MobilitySimulation
-
-# Create track
-track = Track(length=1000.0, num_laps=3, name="Test Circuit")
-
-# Create simulation
-sim = MobilitySimulation(track=track)
-
-# Add agents
-for i in range(5):
-    vehicle = RacingVehicle(
-        unique_id=f"car_{i}",
-        model=sim,
-        name=f"Racer #{i+1}",
-        max_speed=200.0,
-        acceleration=15.0
-    )
-    sim.add_agent(vehicle)
-
-# Run simulation
-sim.run()
-
-# Get results
-standings = sim.get_current_standings()
-```
-
-### Event Callbacks
-
-```python
-# Register callbacks for events
-def on_lap_complete(agent, lap, lap_time):
-    print(f"{agent.name} completed lap {lap} in {lap_time:.2f}s")
-
-def on_agent_finish(agent, position):
-    print(f"{agent.name} finished in position {position}!")
-
-sim.register_event_callback('lap_complete', on_lap_complete)
-sim.register_event_callback('agent_finish', on_agent_finish)
-```
-
-### Custom Agents
-
-```python
-from shifters.agents.base_agent import MobilityAgent
-
-class Drone(MobilityAgent):
-    def __init__(self, unique_id, model, battery_capacity=100.0, **kwargs):
-        super().__init__(unique_id, model, **kwargs)
-        self.battery = battery_capacity
-
-    def _move(self):
-        super()._move()
-        # Custom battery drain logic
-        self.battery -= 0.1 * (self.speed / self.max_speed)
-```
-
-## Architecture Components
-
-### Agents (`shifters/agents/`)
-- `MobilityAgent`: Base class for all moving entities
-- `RacingVehicle`: Specialized for racing scenarios with energy management
-
-### Environment (`shifters/environment/`)
-- `Track`: Represents racing circuit or path
-- `Environment`: Manages track and conditions
-- `Checkpoint`: Track waypoints
-
-### Simulation Core (`shifters/simcore/`)
-- `MobilitySimulation`: Main simulation engine
-- Event management system
-- Time-stepping logic
-
-### Leaderboard (`shifters/leaderboard/`)
-- `Leaderboard`: Real-time ranking system
-- `AgentRanking`: Individual agent stats and position
-- Efficient sorting and updates
-
-## Pre-configured Scenarios
-
-The system includes several pre-configured scenarios:
-
-- **Formula E**: Electric street racing (22 agents, 2.4km track)
-- **MotoGP**: Motorcycle racing (24 agents, 4.8km track)
-- **Drone Racing**: FPV drone racing (8 agents, 800m technical course)
-- **Supply Chain**: Last-mile delivery (50 agents, 15km urban route)
-- **Traffic Flow**: Urban traffic management (100 agents, 5km corridor)
+### Advanced Parameters
+- **Differential Preload** (0-100 Nm): Affects power distribution in corners
+- **Engine Braking** (0-100%): Natural deceleration when off throttle
+- **Brake Balance** (40-70% front): Distribution of braking force
 
 ## Roadmap
 
-- [ ] Web-based live dashboard
-- [ ] Real-time API for leaderboard access
-- [ ] 2D/3D visualization
-- [ ] More agent types (drones, autonomous vehicles, etc.)
-- [ ] Complex event rules (collisions, overtaking, pit stops)
-- [ ] Weather and environmental effects
-- [ ] Multi-track support
-- [ ] Historical data analysis
-- [ ] Machine learning agent strategies
+- [x] ~~3D visualization with Three.js~~
+- [x] ~~Real-time telemetry and analytics~~
+- [x] ~~Advanced physics (differential, brake balance)~~
+- [x] ~~Per-vehicle customization~~
+- [x] ~~Electron desktop application~~
+- [ ] Multiplayer race viewing
+- [ ] AI-driven racing strategies
+- [ ] Weather radar and forecasting
+- [ ] Tire compound strategy optimizer
+- [ ] Export race data to CSV/JSON
+- [ ] Replay system with playback controls
+- [ ] Team management (constructors championship)
+- [ ] Custom circuit editor
+- [ ] VR/AR visualization support
 
 ## Development
 
+### Frontend Development
+
 ```bash
+cd frontend
+
 # Install dependencies
-uv sync
+pnpm install
 
-# Install pre-commit hooks (required for all contributors)
-uv run pre-commit install
-
-# Run tests (when available)
-uv run pytest
-
-# Format code manually
-uv run black shifters/
-
-# Run pre-commit hooks on all files
-uv run pre-commit run --all-files
+# Development server (hot reload)
+pnpm dev
 
 # Type checking
-uv run mypy shifters/
+pnpm run tsc --noEmit
+
+# Build for production
+pnpm build
+
+# Electron development with hot reload
+pnpm electron:dev
 ```
+
+### Code Structure Guidelines
+
+- **Components**: Keep React components focused and reusable
+- **Simulation Logic**: Separate physics calculations from rendering
+- **State Management**: Use React hooks for local state, consider Context for global state
+- **Performance**: Optimize Three.js rendering with useMemo and useFrame
+- **TypeScript**: Maintain strict type safety, define proper interfaces
+
+### Adding New Circuits
+
+1. Obtain GPS coordinates as array of `{lat, lng}` or `{x, y}` points
+2. Add to `/frontend/public/data/circuits/f1-2024-circuits.json`
+3. Follow the existing format with circuit metadata
+4. Circuit will automatically appear in dropdown selector
+
+### Adding New Vehicle Types
+
+1. Create 3D model component in `Race3DVisualization.tsx`
+2. Add vehicle type to `VehicleConfig` interface
+3. Update physics parameters in `RacingVehicle.ts`
+4. Add UI controls in `ControlDeck.tsx`
+
+## Tech Stack
+
+**Frontend**
+- Next.js 14 (React framework)
+- TypeScript (type safety)
+- Three.js (@react-three/fiber, @react-three/drei) - 3D rendering
+- Recharts (telemetry visualization)
+- Tailwind CSS (styling)
+- Radix UI (UI components)
+- Electron (desktop app)
+
+**Build & Development**
+- pnpm (package manager)
+- Electron Builder (app packaging)
+- Concurrently (parallel processes)
+
+## Performance Optimization
+
+- Simulation runs at configurable FPS (default: 10 Hz)
+- Three.js rendering optimized with instancing and geometry reuse
+- Memoized track curve calculations
+- Efficient position updates using RAF (requestAnimationFrame)
+- Telemetry data collection only when needed
 
 ## Contributing
 
-This is a foundational implementation designed for extension. Key areas for contribution:
+Contributions welcome! Areas for improvement:
 
-1. New agent types and behaviors
-2. Additional scenarios
-3. Visualization components
-4. Performance optimizations
-5. Event types and rules
+1. **Physics Enhancements**: More realistic aero, suspension modeling
+2. **UI/UX**: Mobile responsiveness, accessibility improvements
+3. **Features**: Race replays, data export, circuit editor
+4. **Performance**: WebGL optimizations, Web Workers for simulation
+5. **Testing**: Unit tests, integration tests, E2E tests
 
-### Setting Up for Development
+## Screenshots
 
-Before making any commits, install the pre-commit hooks:
-
-```bash
-uv run pre-commit install
-```
-
-This ensures code is automatically formatted with Black and passes basic checks before each commit. All PRs must pass these checks.
+![ss1](/docs/ss1.png)
+![ss2](/docs/ss2.png)
 
 ## License
 
 MIT License
+
+---
+
+**Built with ❤️ for F1 simulation enthusiasts**
