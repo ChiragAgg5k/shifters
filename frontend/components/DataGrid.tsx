@@ -24,13 +24,13 @@ export function DataGrid({ raceState }: DataGridProps) {
     const aDnf = a.finished && a.lap < (track?.numLaps || 999)
     const bDnf = b.finished && b.lap < (track?.numLaps || 999)
     if (aDnf !== bDnf) return aDnf ? 1 : -1
-    
+
     // Finished cars (completed all laps) go to top, sorted by time
     const aFinished = a.finished && a.lap >= (track?.numLaps || 999)
     const bFinished = b.finished && b.lap >= (track?.numLaps || 999)
     if (aFinished !== bFinished) return aFinished ? -1 : 1
     if (aFinished && bFinished) return (a.totalTime || 0) - (b.totalTime || 0)
-    
+
     // For active race: sort by laps (descending), then by position within lap
     if (a.lap !== b.lap) return b.lap - a.lap // More laps = higher rank
     return (b.position || 0) - (a.position || 0) // Further ahead in lap = higher rank
@@ -46,7 +46,6 @@ export function DataGrid({ raceState }: DataGridProps) {
 
   const weather = raceState?.environment?.weather || 'clear'
   const temperature = raceState?.environment?.temperature || 25
-  const trackWaterLevel = raceState?.environment?.trackWaterLevel || 0
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

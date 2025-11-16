@@ -3,7 +3,6 @@
 import { RaceVisualization } from '@/components/RaceVisualization'
 import { ControlDeck } from '@/components/ControlDeck'
 import { DataGrid } from '@/components/DataGrid'
-import { RaceReport } from '@/components/RaceReport'
 import { useRaceSimulation } from '@/lib/hooks/useRaceSimulation'
 
 export default function Home() {
@@ -53,6 +52,9 @@ export default function Home() {
               updateVehicleAcceleration={updateVehicleAcceleration}
               updateVehicleDnfProbability={updateVehicleDnfProbability}
               updateVehicleCorneringSkill={updateVehicleCorneringSkill}
+              updateVehicleDifferentialPreload={updateVehicleDifferentialPreload}
+              updateVehicleEngineBraking={updateVehicleEngineBraking}
+              updateVehicleBrakeBalance={updateVehicleBrakeBalance}
             />
           </div>
         </div>
@@ -62,11 +64,11 @@ export default function Home() {
         </div>
 
         {/* Race Report - shown when race is complete */}
-        {raceState?.raceReport && (
+        {/* {raceState?.raceReport && (
           <div className="mt-6">
             <RaceReport reportData={raceState.raceReport} />
           </div>
-        )}
+        )} */}
       </div>
     </div>
   )
