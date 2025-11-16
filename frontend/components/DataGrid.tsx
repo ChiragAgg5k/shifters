@@ -8,6 +8,7 @@ export function DataGrid({ raceState }: DataGridProps) {
   // Use agents data which has all racing telemetry, sorted by position
   const agents = raceState?.agents || []
   const track = raceState?.environment?.track
+  const dnfVehicles = raceState?.dnfs || []
 
   // Calculate progress for each agent
   const agentsWithProgress = agents.map((agent: any) => {
@@ -15,15 +16,14 @@ export function DataGrid({ raceState }: DataGridProps) {
     const totalDistance = trackLength * (track?.numLaps || 1)
     const currentDistance = (agent.lap * trackLength) + (agent.position || 0)
     const progress = (currentDistance / totalDistance) * 100
-    return { ...agent, progress }
+    const isDNF = dnfVehicles.includes(agent.id)
+    return { ...agent, progress, isDNF }
   })
 
   // Sort by laps completed first, then by time
   const sortedAgents = [...agentsWithProgress].sort((a, b) => {
     // DNF cars go to bottom
-    const aDnf = a.finished && a.lap < (track?.numLaps || 999)
-    const bDnf = b.finished && b.lap < (track?.numLaps || 999)
-    if (aDnf !== bDnf) return aDnf ? 1 : -1
+    if (a.isDNF !== b.isDNF) return a.isDNF ? 1 : -1
 
     // Finished cars (completed all laps) go to top, sorted by time
     const aFinished = a.finished && a.lap >= (track?.numLaps || 999)
@@ -77,7 +77,9 @@ export function DataGrid({ raceState }: DataGridProps) {
               {sortedAgents.map((agent: any, index: number) => (
                 <div
                   key={agent.id}
-                  className="grid grid-cols-12 gap-2 px-3 py-2 bg-card border border-border rounded-md items-center"
+                  className={`grid grid-cols-12 gap-2 px-3 py-2 bg-card border rounded-md items-center ${
+                    agent.isDNF ? 'border-red-500/30 opacity-60' : 'border-border'
+                  }`}
                 >
                   {/* Position */}
                   <div className="col-span-1 text-xl font-bold text-primary">
@@ -88,17 +90,22 @@ export function DataGrid({ raceState }: DataGridProps) {
                   <div className="col-span-5">
                     <div className="font-medium text-foreground flex items-center gap-2">
                       {agent.name}
-                      {agent.inPit && (
+                      {agent.isDNF && (
+                        <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">
+                          DNF
+                        </span>
+                      )}
+                      {agent.inPit && !agent.isDNF && (
                         <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-bold animate-pulse">
                           PIT
                         </span>
                       )}
-                      {agent.drsActive && (
+                      {agent.drsActive && !agent.isDNF && (
                         <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
                           DRS
                         </span>
                       )}
-                      {agent.inSlipstream && (
+                      {agent.inSlipstream && !agent.isDNF && (
                         <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
                           SLIP
                         </span>
@@ -146,7 +153,9 @@ export function DataGrid({ raceState }: DataGridProps) {
 
                   {/* Gap */}
                   <div className="col-span-2 text-sm font-medium text-foreground">
-                    {index === 0 ? (
+                    {agent.isDNF ? (
+                      <span className="text-red-400 font-bold">DNF</span>
+                    ) : index === 0 ? (
                       <span className="text-green-400">Leader</span>
                     ) : (
                       <span className={agent.gapToAhead > 1.0 ? 'text-orange-400' : 'text-yellow-400'}>
