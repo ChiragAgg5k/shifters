@@ -22,6 +22,7 @@ export interface SimulationState {
     track: TrackInfo
     weather: string
     temperature: number
+    trackWaterLevel?: number
   }
   currentLap: number
   safetyCar?: {
@@ -30,6 +31,7 @@ export interface SimulationState {
     position: number
   }
   dnfs?: string[]
+  raceReport?: any
 }
 
 export class RaceSimulation {
@@ -375,13 +377,13 @@ export class RaceSimulation {
 
     const finishedVehicles = this.vehicles
       .filter(v => v.finished)
-      .sort((a, b) => (a.finishTime || 0) - (b.finishTime || 0))
+      .sort((a, b) => (a.totalTime || 0) - (b.totalTime || 0))
 
     // Final Classification
     console.log('\n🏁 FINAL CLASSIFICATION:')
     finishedVehicles.forEach((v, i) => {
-      const totalTime = (v.finishTime || v.totalTime).toFixed(2)
-      const gap = i === 0 ? 'Winner' : `+${((v.finishTime || 0) - (finishedVehicles[0].finishTime || 0)).toFixed(2)}s`
+      const totalTime = (v.totalTime || 0).toFixed(2)
+      const gap = i === 0 ? 'Winner' : `+${((v.totalTime || 0) - (finishedVehicles[0].totalTime || 0)).toFixed(2)}s`
       console.log(`${(i + 1).toString().padStart(2)}. ${v.name.padEnd(15)} ${totalTime}s (${gap}) - ${v.pitStops} stops`)
     })
 
@@ -405,8 +407,8 @@ export class RaceSimulation {
       classification: finishedVehicles.map((v, i) => ({
         position: i + 1,
         name: v.name,
-        totalTime: v.finishTime || v.totalTime,
-        gap: i === 0 ? 0 : (v.finishTime || 0) - (finishedVehicles[0].finishTime || 0),
+        totalTime: v.totalTime || 0,
+        gap: i === 0 ? 0 : (v.totalTime || 0) - (finishedVehicles[0].totalTime || 0),
         pitStops: v.pitStops,
         telemetry: v.lapTelemetry
       })),

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { RaceVisualization } from '@/components/RaceVisualization'
 import { ControlDeck } from '@/components/ControlDeck'
 import { DataGrid } from '@/components/DataGrid'
+import { RaceReport } from '@/components/RaceReport'
 import { useRaceSimulation } from '@/lib/hooks/useRaceSimulation'
 
 // Dynamically import 3D visualization to avoid SSR issues with Three.js
@@ -104,15 +105,24 @@ export default function Home() {
         </div>
 
         <div className="mt-6">
-          <DataGrid raceState={raceState} />
+          {raceState ? (
+            <DataGrid raceState={raceState} />
+          ) : (
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <div className="text-muted-foreground">
+                <div className="text-2xl mb-2">📊</div>
+                <p>Start a race to see live leaderboard and telemetry data</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Race Report - shown when race is complete */}
-        {/* {raceState?.raceReport && (
+        {raceState?.raceReport && (
           <div className="mt-6">
             <RaceReport reportData={raceState.raceReport} />
           </div>
-        )} */}
+        )}
       </div>
     </div>
   )
