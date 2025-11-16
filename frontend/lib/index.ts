@@ -11,5 +11,5 @@ export type { SimulationState } from './simulation/RaceSimulation'
 export { useRaceSimulation } from './hooks/useRaceSimulation'
 export type { RaceConfig } from './hooks/useRaceSimulation'
 
-export { F1_CIRCUITS, getCircuitById, getCircuitNames } from './data/circuits'
+export { F1_CIRCUITS } from './data/circuits'
 export type { Circuit } from './data/circuits'
