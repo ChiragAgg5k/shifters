@@ -18,16 +18,22 @@ export function DataGrid({ raceState }: DataGridProps) {
     return { ...agent, progress }
   })
 
-  // Sort by currentPosition (already correctly calculated in simulation)
-  // This properly handles backmarkers by using total race progress
+  // Sort by laps completed first, then by time
   const sortedAgents = [...agentsWithProgress].sort((a, b) => {
     // DNF cars go to bottom
     const aDnf = a.finished && a.lap < (track?.numLaps || 999)
     const bDnf = b.finished && b.lap < (track?.numLaps || 999)
     if (aDnf !== bDnf) return aDnf ? 1 : -1
     
-    // Otherwise sort by currentPosition (which accounts for total progress)
-    return a.currentPosition - b.currentPosition
+    // Finished cars (completed all laps) go to top, sorted by time
+    const aFinished = a.finished && a.lap >= (track?.numLaps || 999)
+    const bFinished = b.finished && b.lap >= (track?.numLaps || 999)
+    if (aFinished !== bFinished) return aFinished ? -1 : 1
+    if (aFinished && bFinished) return (a.totalTime || 0) - (b.totalTime || 0)
+    
+    // For active race: sort by laps (descending), then by position within lap
+    if (a.lap !== b.lap) return b.lap - a.lap // More laps = higher rank
+    return (b.position || 0) - (a.position || 0) // Further ahead in lap = higher rank
   })
 
   const formatTime = (seconds: number | null | undefined) => {

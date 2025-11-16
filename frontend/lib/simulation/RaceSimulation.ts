@@ -221,7 +221,9 @@ export class RaceSimulation {
           const pitDuration = vehicle.pitStop(nextCompound)
           vehicle.lapPitStop = true
           vehicle.lapPitDuration = pitDuration
-        }        // Check if finished race (after completing the lap)
+        }
+
+        // Check if finished race (after completing the lap)
         if (vehicle.lap >= this.track.numLaps) {
           vehicle.finished = true
           console.log(`🏁 ${vehicle.name} finished in position ${this.getFinishedCount()}`)
@@ -269,9 +271,9 @@ export class RaceSimulation {
       }
     }
 
-    // Check if race is complete
+    // Check if race is complete (all vehicles finished or DNF'd)
     const activeVehicles = this.vehicles.filter(v => !v.finished && !this.dnfVehicles.has(v.id))
-    if (activeVehicles.length === 0 && this.vehicles.some(v => v.finished)) {
+    if (activeVehicles.length === 0 && this.vehicles.length > 0) {
       this.running = false
       console.log(`🏆 Race finished! Total time: ${this.simulationTime.toFixed(2)}s`)
       this.generateRaceReport()

@@ -16,6 +16,7 @@ export default function Home() {
     updateTrackTemperature,
     updateWeather,
     updateRainProbability,
+    updateGlobalDnfProbability,
     updateVehicleMaxSpeed,
     updateVehicleAcceleration,
     updateVehicleDnfProbability,
@@ -47,6 +48,7 @@ export default function Home() {
               updateTrackTemperature={updateTrackTemperature}
               updateWeather={updateWeather}
               updateRainProbability={updateRainProbability}
+              updateGlobalDnfProbability={updateGlobalDnfProbability}
               updateVehicleMaxSpeed={updateVehicleMaxSpeed}
               updateVehicleAcceleration={updateVehicleAcceleration}
               updateVehicleDnfProbability={updateVehicleDnfProbability}

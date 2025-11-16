@@ -20,6 +20,7 @@ interface ControlDeckProps {
   updateTrackTemperature?: (temp: number) => void
   updateWeather?: (weather: string) => void
   updateRainProbability?: (probability: number) => void
+  updateGlobalDnfProbability?: (dnfProbability: number) => void
   updateVehicleMaxSpeed?: (vehicleIndex: number, maxSpeed: number) => void
   updateVehicleAcceleration?: (vehicleIndex: number, acceleration: number) => void
   updateVehicleDnfProbability?: (vehicleIndex: number, dnfProbability: number) => void
@@ -36,6 +37,7 @@ export function ControlDeck({
   updateSpeedMultiplier,
   updateTrackTemperature,
   updateRainProbability,
+  updateGlobalDnfProbability,
   updateVehicleMaxSpeed,
   updateVehicleAcceleration,
   updateVehicleDnfProbability,
@@ -130,14 +132,14 @@ export function ControlDeck({
       trackTemperature: trackTemp,
       rainProbability: rainProbability / 100, // Convert percentage to 0-1
       speedMultiplier,
-      agentConfig: customizeAgents ? {
-        maxSpeed: agentMaxSpeed,
-        acceleration: agentAcceleration,
-        dnfProbability: agentDnfProbability / 100, // Convert percentage to 0-1
-        differentialPreload: agentDifferential,
-        engineBraking: agentEngineBraking,
-        brakeBalance: agentBrakeBalance
-      } : undefined,
+      agentConfig: {
+        maxSpeed: customizeAgents ? agentMaxSpeed : undefined,
+        acceleration: customizeAgents ? agentAcceleration : undefined,
+        dnfProbability: agentDnfProbability / 100, // Always pass DNF probability
+        differentialPreload: customizeAgents ? agentDifferential : undefined,
+        engineBraking: customizeAgents ? agentEngineBraking : undefined,
+        brakeBalance: customizeAgents ? agentBrakeBalance : undefined
+      },
       perAgentConfig: perAgentCfg
     })
   }
@@ -248,7 +250,7 @@ export function ControlDeck({
           <input
             type="range"
             min="0.5"
-            max="4"
+            max="10"
             step="0.5"
             value={speedMultiplier}
             onChange={(e) => {
@@ -260,7 +262,7 @@ export function ControlDeck({
             }}
             className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
           />
-          <div className="text-xs text-muted-foreground text-center">0.5x - 4x speed</div>
+          <div className="text-xs text-muted-foreground text-center">0.5x - 10x speed</div>
         </div>
 
         <div className="space-y-2">
@@ -352,11 +354,9 @@ export function ControlDeck({
                 onChange={(e) => {
                   const newDnf = parseFloat(e.target.value)
                   setAgentDnfProbability(newDnf)
-                  if (raceActive && updateVehicleDnfProbability) {
+                  if (raceActive && updateGlobalDnfProbability) {
                     // Update all vehicles with new DNF probability
-                    for (let i = 0; i < numAgents; i++) {
-                      updateVehicleDnfProbability(i, newDnf / 100)
-                    }
+                    updateGlobalDnfProbability(newDnf / 100)
                   }
                 }}
                 className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"

@@ -113,7 +113,7 @@ export function useRaceSimulation() {
 
       const maxSpeed = perAgentCfg?.maxSpeed ?? globalCfg?.maxSpeed ?? (85 + ((config.numAgents - 1 - i) * 2)) // 85-95 m/s
       const acceleration = perAgentCfg?.acceleration ?? globalCfg?.acceleration ?? (12 + ((config.numAgents - 1 - i) * 0.5))
-      const dnfProbability = perAgentCfg?.dnfProbability ?? globalCfg?.dnfProbability ?? 0.02
+      const dnfProbability = perAgentCfg?.dnfProbability ?? globalCfg?.dnfProbability ?? 0.02;
 
       // Advanced physics parameters
       const differentialPreload = perAgentCfg?.differentialPreload ?? globalCfg?.differentialPreload ?? 50.0
@@ -228,6 +228,18 @@ export function useRaceSimulation() {
   }, [])
 
   /**
+   * Update global DNF probability for all vehicles during race
+   */
+  const updateGlobalDnfProbability = useCallback((dnfProbability: number) => {
+    if (simulationRef.current) {
+      for (const vehicle of simulationRef.current.vehicles) {
+        vehicle.updateDnfProbability(dnfProbability)
+      }
+      console.log(`[Hook] Updated all vehicles DNF probability to ${(dnfProbability * 100).toFixed(1)}%`)
+    }
+  }, [])
+
+  /**
    * Update vehicle max speed during race
    */
   const updateVehicleMaxSpeed = useCallback((vehicleIndex: number, maxSpeed: number) => {
@@ -301,6 +313,7 @@ export function useRaceSimulation() {
     updateTrackTemperature,
     updateWeather,
     updateRainProbability,
+    updateGlobalDnfProbability,
     updateVehicleMaxSpeed,
     updateVehicleAcceleration,
     updateVehicleDnfProbability,

@@ -21,7 +21,8 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "tailwind-merge": "^2.2.0",
-    "lucide-react": "^0.292.0"
+    "lucide-react": "^0.292.0",
+    "recharts": "^2.10.3"
   },
   "devDependencies": {
     "typescript": "^5.2.2",

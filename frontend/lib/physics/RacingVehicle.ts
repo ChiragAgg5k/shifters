@@ -201,6 +201,7 @@ export class RacingVehicle {
 
   // Pit stop strategy
   inPit: boolean = false
+  pitTimeRemaining: number = 0 // Simulation time remaining in pit (seconds)
   nextPitLap: number = -1 // -1 means not yet planned
   pitStopStrategy: ('soft' | 'medium' | 'hard')[] = [] // Tire compound strategy
 
@@ -238,7 +239,7 @@ export class RacingVehicle {
     // Driver parameters
     this.qualifyingPosition = config.qualifyingPosition || 1
     this.lapTimeStd = config.lapTimeStd || 0.15
-    this.dnfProbability = config.dnfProbability || 0.02
+    this.dnfProbability = config.dnfProbability ?? 0.02
     this.gridPenalty = (this.qualifyingPosition - 1) * 0.25
 
     this.currentPosition = this.qualifyingPosition
@@ -366,6 +367,22 @@ export class RacingVehicle {
    * Enhanced with load transfer, differential, engine braking, and brake balance
    */
   move(timeStep: number, trackLength: number): void {
+    // Handle pit stop timing (simulation-based, not real-time)
+    // DO NOT collect telemetry during pit stops
+    if (this.inPit) {
+      this.pitTimeRemaining -= timeStep
+      // Force exit pit after time expires (safety check to prevent stuck vehicles)
+      // Maximum pit time is 5 seconds - if it exceeds that, force exit
+      if (this.pitTimeRemaining <= 0 || this.pitTimeRemaining < -1) {
+        this.inPit = false
+        this.pitTimeRemaining = 0
+        // Continue to normal physics after pit stop
+      } else {
+        // Still in pit, don't move or collect telemetry
+        return
+      }
+    }
+
     // Driver consistency variation
     const lapTimeVariation = this.lapTimeStd * (Math.random() * 2 - 1)
 
@@ -884,6 +901,9 @@ export class RacingVehicle {
     // Clamp to reasonable range (2.0s - 4.0s)
     const actualPitDuration = Math.max(2.0, Math.min(4.0, pitDuration))
 
+    // Set pit time remaining (will be decremented each simulation step)
+    this.pitTimeRemaining = actualPitDuration
+
     // Reset tire state with fresh tires
     this.tireWear = 0.0
     this.tireTemperature = 60.0 // Fresh cold tires
@@ -904,11 +924,6 @@ export class RacingVehicle {
 
     // Reset next pit lap (will be recalculated)
     this.nextPitLap = -1
-
-    // Exit pit lane after pit work
-    setTimeout(() => {
-      this.inPit = false
-    }, actualPitDuration * 1000)
 
     console.log(`🔧 ${this.name} pitted on lap ${this.lap} (${actualPitDuration.toFixed(2)}s) - New tires: ${this.tireCompound.toUpperCase()}`)
 
